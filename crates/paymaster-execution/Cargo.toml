@@ -1,0 +1,36 @@
+[package]
+name = "paymaster-execution"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[features]
+testing = ["dep:testcontainers"]
+
+[dependencies]
+async-trait = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server", "macros"] }
+moka = { workspace = true, features = ["sync"] }
+paymaster-common = { path = "../paymaster-common" }
+paymaster-starknet = { path = "../paymaster-starknet" }
+paymaster-prices = { path = "../paymaster-prices" }
+paymaster-relayer = { path = "../paymaster-relayer" }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
+starknet = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread", "rt"] }
+uuid = { workspace = true, features = ["v4"] }
+testcontainers = { workspace = true, optional = true }
+tracing = { workspace = true, features = ['attributes'] }
+opentelemetry = {  workspace = true }
+
+[dev-dependencies]
+paymaster-relayer = { path = "../paymaster-relayer", features = ["testing"] }
+paymaster-execution = { path = ".", features = ["testing"] }
+paymaster-starknet = { path = "../paymaster-starknet", features = ["testing"] }
+paymaster-prices = { path = "../paymaster-prices", features = ["testing"] }
+jsonrpsee = { workspace = true, features = ["client"] }
+

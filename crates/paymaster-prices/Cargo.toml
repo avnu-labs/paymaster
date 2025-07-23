@@ -1,0 +1,22 @@
+[package]
+name = "paymaster-prices"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+testing = []
+
+[dependencies]
+async-trait = { workspace = true }
+paymaster-common = { path = "../paymaster-common" }
+paymaster-starknet = { path = "../paymaster-starknet" }
+bigdecimal = { workspace = true }
+reqwest = {workspace = true, features = ["json"] }
+serde = { workspace = true }
+serde_with = { workspace = true }
+serde_json = { workspace = true }
+starknet = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+tracing = { workspace = true, features = ['attributes'] }

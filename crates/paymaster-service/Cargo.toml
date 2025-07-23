@@ -1,0 +1,31 @@
+[package]
+name = "paymaster-service"
+version = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+envy = { workspace = true }
+log = { workspace = true }
+lazy_static = { workspace = true }
+paymaster-rpc = { path = "../paymaster-rpc" }
+paymaster-sponsoring = { path = "../paymaster-sponsoring" }
+paymaster-common = { path = "../paymaster-common" }
+paymaster-starknet = { path = "../paymaster-starknet" }
+paymaster-prices = { path = "../paymaster-prices" }
+paymaster-relayer = { path = "../paymaster-relayer" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
+serde_with = { workspace = true }
+simple_logger = { workspace = true }
+regex = {  workspace = true }
+starknet = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+tracing = { workspace = true, features = ['attributes'] }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["grpc-tonic", "logs", "trace", "metrics"] }

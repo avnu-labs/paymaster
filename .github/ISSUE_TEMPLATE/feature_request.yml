@@ -1,0 +1,153 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for the paymaster
+title: "Feature: "
+labels: ["new-feature"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a new feature! Please provide as much detail as possible to help us understand your request.
+
+  - type: checkboxes
+    id: pre-request
+    attributes:
+      label: Pre-request checklist
+      description: Please confirm you have completed these steps before submitting
+      options:
+        - label: "I have searched existing issues to ensure this feature hasn't been requested before"
+          required: true
+        - label: "I have checked the documentation to confirm this functionality doesn't already exist"
+          required: true
+        - label: "This is a feature request and not a bug report"
+          required: true
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve? What is the motivation behind this request?
+      placeholder: |
+        Describe the problem you're trying to solve or the need for improvement that you have identified.
+        
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you'd like to see implemented
+      placeholder: |
+        A clear and concise description of what you want to happen.
+        
+        Example: "Add a new RPC endpoint that allows..."
+        Example: "Implement automatic retry logic for..."
+        Example: "Create a CLI command that..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternative solutions or features you've considered
+      placeholder: |
+        A clear description of any alternative solutions or workarounds you've considered.
+        We want to understand if the existing code already has a workaround for this.
+        It also shows you spent sufficient time trying to understand why this feature was not implemented yet.
+        Example: "An alternative would be to..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature type
+      description: What type of feature is this?
+      options:
+        - New RPC endpoint or method
+        - New SNIP Support
+        - Improved relayer management
+        - Better price oracle integration
+        - Authentication/sponsoring improvements
+        - CLI enhancements
+        - Configuration options
+        - Performance optimization
+        - Developer experience improvement
+        - Documentation enhancement
+        - Security Improvement
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical - blocking current work
+        - High - would significantly improve workflow
+        - Medium - nice to have enhancement
+        - Low - minor improvement
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking-changes
+    attributes:
+      label: Breaking changes
+      description: Would this feature require breaking changes to existing APIs or configurations?
+      options:
+        - "No - fully backward compatible"
+        - "Minor - requires configuration updates"
+        - "Major - requires API changes"
+        - "Unsure - needs design discussion"
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-design
+    attributes:
+      label: API design (if applicable)
+      description: If this involves new APIs or endpoints, please provide a rough design
+      render: json
+      placeholder: |
+        Example RPC method:
+        {
+          "method": "paymaster_newFeature",
+          "params": {
+            "parameter1": "value",
+            "parameter2": 123
+          }
+        }
+        
+        Or CLI command:
+        paymaster new-command --option1=value --option2
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: implementation-help
+    attributes:
+      label: Implementation
+      description: Are you willing to help implement this feature?
+      options:
+        - label: "I'm willing to submit a PR for this feature"
+        - label: "I can help with testing and feedback"
+        - label: "I can help with documentation"
+        - label: "I need this implemented by the maintainers"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context, mockups, or references about the feature request
+      placeholder: |
+        - Links to similar features in other projects
+        - References to specifications or standards
+        - Links to relevant discussions or issues
+        - Timeline requirements or constraints
+    validations:
+      required: false

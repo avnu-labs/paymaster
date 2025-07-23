@@ -1,0 +1,35 @@
+[package]
+name = "paymaster-relayer"
+version = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+
+[features]
+testing = ["dep:testcontainers"]
+
+[dependencies]
+async-trait = { workspace = true }
+deadpool-redis = { workspace = true }
+futures = { workspace = true }
+paymaster-starknet = { path = "../paymaster-starknet" }
+paymaster-common = { path = "../paymaster-common" }
+reqwest = {workspace = true, features = ["json"] }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
+serde_with = { workspace = true }
+starknet = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+testcontainers = { workspace = true, optional = true }
+opentelemetry = { workspace = true }
+tracing = { workspace = true, features = ['attributes'] }
+num-traits = { workspace = true }
+
+[dev-dependencies]
+paymaster-relayer = { path = ".", features = ["testing"] }
+paymaster-starknet = { path = "../paymaster-starknet", features = ["testing"]}
+paymaster-execution = { path = "../paymaster-execution", features = ["testing"] }
+paymaster-prices = { path = "../paymaster-prices", features = ["testing"] }
+testcontainers = { workspace = true }
+wiremock = { workspace = true }

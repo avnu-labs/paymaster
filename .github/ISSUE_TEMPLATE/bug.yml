@@ -1,0 +1,269 @@
+name: Bug Report
+description: Thank you for reporting a bug and helping improve the Paymaster
+title: "Bug: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us reproduce and fix the issue.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce
+      description: Please provide detailed steps to reproduce the behavior.
+      placeholder: |
+        1. Start paymaster with configuration: ...
+        2. Exact command issued to start the service with relevant CLI args
+        3. Execute transaction with parameters: What triggered the issue....
+        4. Observed error: ...
+        Above points are suggestive - please provide details as maybe relevant to the issue
+        Please DO NOT provide any sensitive information like private/ API keys
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened, including any error messages or unexpected outputs.
+      placeholder: What actually happened instead? 
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Paymaster version
+      description: What version of paymaster are you running?
+      placeholder: "e.g., v1.0.0, commit hash, or main branch"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: What platform are you running on?
+      options:
+        - Linux x86_64
+        - Linux ARM64
+        - macOS x86_64
+        - macOS ARM64 (Apple Silicon)
+        - Windows x86_64
+        - Docker container
+        - Other (specify in additional context)
+    validations:
+      required: true
+
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust version
+      description: Output of `cargo version` or `rustc --version`
+      placeholder: "e.g., cargo 1.85.0, rustc 1.85.0"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      description: Which Starknet network are you using?
+      options:
+        - Starknet Mainnet
+        - Starknet Sepolia
+        - Local devnet
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Paste relevant parts of your configuration file (remove sensitive information like private, API keys)
+      render: json
+      placeholder: |
+        "rpc": {
+            "port": 12777
+        },
+        "supported_token": [
+            "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+            "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+        ],
+        
+        # Remove private keys and sensitive data
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant log output here. Use --verbosity=debug for more detailed logs.
+      render: shell
+      placeholder: |
+        2024-07-01T12:00:00.000Z INFO paymaster starting...
+        2024-07-01T12:00:01.000Z ERROR [paymaster-rpc] ...
+        
+        Include timestamps and remove any sensitive information.
+    validations:
+      required: false
+
+  - type: textarea
+    id: request-response
+    attributes:
+      label: Request/Response (if applicable)
+      description: Include the request payload and response/error that triggered the bug
+      render: json
+      placeholder: |
+        Request:
+        {
+          "method": "paymaster_buildTransaction",
+          "params": {
+            "transaction": { ... },
+            "parameters": { ... }
+          }
+        }
+        
+        Response/Error:
+        {
+          "errors": []
+        }
+    validations:
+      required: false
+
+  - type: input
+    id: transaction-hash
+    attributes:
+      label: Transaction hash (if applicable)
+      description: The transaction hash if this bug relates to a specific transaction
+      placeholder: "0x..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: gas-token
+    attributes:
+      label: Gas token (if applicable)
+      description: Which gas token was being used when the error happened ?
+      options:
+        - ETH
+        - STRK
+        - USDC
+        - Other (specify below)
+    validations:
+      required: false
+
+  - type: dropdown
+    id: fee-mode
+    attributes:
+      label: Fee mode (if applicable)
+      description: Which fee mode was being used?
+      options:
+        - Default (user pays)
+        - Sponsored (application pays)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: affected-components
+    attributes:
+      label: Affected component(s)
+      description: Which component(s) are affected by this bug?
+      options:
+        - label: "`paymaster-rpc` (RPC server)"
+        - label: "`paymaster-execution` (Transaction execution)"
+        - label: "`paymaster-relayer` (Relayer management & rebelancing)"
+        - label: "`paymaster-starknet` (Starknet integration)"
+        - label: "`paymaster-prices` (Price oracle)"
+        - label: "`paymaster-sponsoring` (Authentication/sponsoring)"
+        - label: "`paymaster-cli` (CLI tools)"
+        - label: "`paymaster-service` (Service management)"
+        - label: "`paymaster-common` (Common utilities)"
+        - label: "Other (specify in additional context)"
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does this occur?
+      description: Frequency of the bug occurrence
+      options:
+        - Always (100% of the time)
+        - Often (>50% of the time)
+        - Sometimes (10-50% of the time)
+        - Rarely (<10% of the time)
+        - Only once
+    validations:
+      required: false
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: What is the impact of this bug?
+      options:
+        - Critical - Service completely unavailable
+        - High - Critical functionality broken
+        - Medium - Degraded performance or functionality
+        - Low - Minor inconvenience
+        - Cosmetic - Visual/cosmetic issue only
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Is there a known workaround for this issue?
+      placeholder: Describe any workaround you've found
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: debugging-attempted
+    attributes:
+      label: Debugging attempted
+      description: What debugging steps have you already tried?
+      options:
+        - label: "Checked logs with debug verbosity (`--verbosity=debug`)"
+        - label: "Verified configuration file syntax and values"
+        - label: "Tested with different network/environment"
+        - label: "Searched existing issues and documentation"
+        - label: "Tried restarting the service"
+        - label: "Tested with minimal configuration"
+        - label: "Checked that relevant accounts have sufficient STRK"
+        - label: "Checked RPC endpoints in config"
+        - label: "Checked api-keys (if applicable) for requests"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here, such as related issues, recent changes
+      placeholder: |
+        - When did this start happening?
+        - Any recent configuration changes?
+        - Links to related issues
+    validations:
+      required: false

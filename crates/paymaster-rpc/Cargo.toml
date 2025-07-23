@@ -1,0 +1,36 @@
+[package]
+name = "paymaster-rpc"
+version = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+bigdecimal = { workspace = true }
+futures = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server", "macros", "client"] }
+paymaster-common = { path = "../paymaster-common" }
+paymaster-sponsoring = { path = "../paymaster-sponsoring" }
+paymaster-starknet = { path = "../paymaster-starknet" }
+paymaster-prices = { path = "../paymaster-prices" }
+paymaster-relayer = { path = "../paymaster-relayer" }
+paymaster-execution = { path = "../paymaster-execution" }
+serde = { workspace = true, features = ["derive"] }
+starknet = { workspace = true }
+serde_json = { workspace = true, features = ["arbitrary_precision", "raw_value"] }
+serde_with = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }
+tracing = { workspace = true, features = ['attributes'] }
+hyper = { workspace = true }
+opentelemetry = "0.29.1"
+paste = { workspace = true }
+
+[dev-dependencies]
+paymaster-relayer = { path = "../paymaster-relayer", features = ["testing"] }
+paymaster-starknet = { path = "../paymaster-starknet", features = ["testing"] }
+paymaster-prices = { path = "../paymaster-prices", features = ["testing"] }
+paymaster-sponsoring = { path = "../paymaster-sponsoring", features = ["testing"] }
+jsonrpsee = { workspace = true, features = ["client"] }

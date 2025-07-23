@@ -1,0 +1,73 @@
+name: Deploy release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_KEY }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            avnulabs/paymaster:${{ github.ref_name }}
+            avnulabs/paymaster:latest
+
+  deploy:
+    needs:
+      - publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: "eu-west-1"
+
+      - name: Sepolia - Download task definitions
+        run: |
+          aws ecs describe-task-definition --task-definition avnu-paymaster-sepolia --query taskDefinition > task-definition.json
+      - name: Sepolia - Fill in the new image ID in the Amazon ECS task definition
+        id: task-def-sepolia
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: avnu-paymaster
+          image: avnulabs/paymaster:${{ github.ref_name }}
+      - name: Sepolia - Deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def-sepolia.outputs.task-definition }}
+          service: "avnu-paymaster"
+          cluster: "sepolia"
+          wait-for-service-stability: false
+
+      - name: Starknet - Download task definitions
+        run: |
+          aws ecs describe-task-definition --task-definition avnu-paymaster-starknet --query taskDefinition > task-definition.json
+      - name: Starknet - Fill in the new image ID in the Amazon ECS task definition
+        id: task-def-starknet
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: avnu-paymaster
+          image: avnulabs/paymaster:${{ github.ref_name }}
+
+      - name: Starknet - Deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def-starknet.outputs.task-definition }}
+          cluster: "starknet"
+          wait-for-service-stability: false

@@ -1,0 +1,22 @@
+[package]
+name = "paymaster-sponsoring"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[features]
+testing = []
+
+[dependencies]
+paymaster-common = { path = "../paymaster-common" }
+thiserror = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+starknet = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+paymaster-sponsoring = { path = ".", features = ["testing"] }

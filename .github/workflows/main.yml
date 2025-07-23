@@ -1,0 +1,112 @@
+name: Tests and linter
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Retrieve cached dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # Check
+      - name: Cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+      # Format
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      # Build
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+  # Test
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup rust env
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Retreive cached dependecies
+        uses: Swatinem/rust-cache@v2
+      - name: Install llvm-tools and cargo-llvm-cov
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
+      - name: Generate coverage report
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+          files: lcov.info
+          fail_ci_if_error: true
+
+  publish:
+    needs:
+      - check
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_KEY }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: avnulabs/paymaster:${{ github.sha }}
+
+  deploy:
+    needs:
+      - publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: "eu-west-1"
+      - name: mainnet-dev - Download task definitions
+        run: |
+          aws ecs describe-task-definition --task-definition avnu-paymaster-mainnet-dev --query taskDefinition > task-definition.json
+      - name: mainnet-dev - Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: avnu-paymaster
+          image: avnulabs/paymaster:${{ github.sha }}
+      - name: mainnet-dev - Deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: "avnu-paymaster"
+          cluster: "mainnet-dev"
+          wait-for-service-stability: false

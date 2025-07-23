@@ -1,0 +1,47 @@
+{
+  "verbosity": "",
+  "prometheus": {
+    "endpoint": ""
+  },
+  "rpc": {
+    "port": 0
+  },
+  "forwarder": "",
+  "supported_tokens": [],
+  "max_fee_multiplier": 0.0,
+  "provider_fee_overhead": 0.0,
+  "gas_tank": {
+    "address": "",
+    "private_key": ""
+  },
+  "estimate_account": {
+    "address": "",
+    "private_key": ""
+  },
+  "starknet": {
+    "chain_id": "",
+    "endpoint": ""
+  },
+  "price": {
+    "provider": "",
+    "endpoint": ""
+  },
+  "authentication": {
+    "mode": "",
+    "provider": "",
+    "database": "",
+    "endpoint": ""
+  },
+  "relayers": {
+    "min_relayer_balance": "",
+    "lock": {
+      "mode": "",
+      "retry_timeout": 1,
+      "redis": {
+        "endpoint": ""
+      }
+    },
+    "private_key": "",
+    "addresses": []
+  }
+}

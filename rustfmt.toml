@@ -1,0 +1,11 @@
+unstable_features = true
+
+max_width=170
+match_block_trailing_comma=true
+newline_style="Unix"
+chain_width=80
+tab_spaces=4
+
+imports_granularity="Module"
+reorder_impl_items=true
+group_imports="StdExternalCrate"

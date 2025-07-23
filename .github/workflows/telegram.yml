@@ -1,0 +1,20 @@
+name: Telegram message notification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main ]
+    types:
+      [ opened ]
+  release:
+    types:
+      - published
+
+jobs:
+  send-tele:
+    uses: 0xlny/github-notifs-telebot/.github/workflows/main.yml@main
+    secrets:
+      MESSAGE_THREAD_ID: "60"
+      TELEGRAM_CHAT_ID: ${{ secrets.AVNU_TELEGRAM_CHAT_ID }}
+      TELEGRAM_TOKEN: ${{ secrets.AVNU_BOT_TOKEN }}

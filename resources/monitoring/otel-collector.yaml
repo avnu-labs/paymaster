@@ -1,0 +1,34 @@
+extensions:
+  health_check:
+  sigv4auth:
+    region: ${env:AWS_REGION}
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch/metrics:
+    timeout: 60s
+  batch/traces:
+    timeout: 1s
+
+exporters:
+  prometheusremotewrite:
+    endpoint: ${env:AWS_PROMETHEUS_ENDPOINT}
+    namespace: "paymaster"
+    auth:
+      authenticator: sigv4auth
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch/metrics]
+      exporters: [prometheusremotewrite]
+
+  extensions: [health_check, sigv4auth]

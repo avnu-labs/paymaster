@@ -1,0 +1,27 @@
+[package]
+name = "paymaster-cli"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+clap = { version = "4.5.39", features = ["derive"] }
+starknet = { workspace = true }
+paymaster-starknet = { path = "../paymaster-starknet" }
+paymaster-common = { path = "../paymaster-common" }
+paymaster-service = { path = "../paymaster-service" }
+paymaster-rpc = { path = "../paymaster-rpc" }
+paymaster-relayer = { path = "../paymaster-relayer" }
+paymaster-prices = { path="../paymaster-prices" }
+paymaster-sponsoring = { path="../paymaster-sponsoring" }
+paymaster = { path = "../paymaster" }
+bigdecimal = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+simple_logger = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+serde_json = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tracing = { workspace = true, features = ['attributes'] }

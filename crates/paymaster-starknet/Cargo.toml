@@ -1,0 +1,24 @@
+[package]
+name = "paymaster-starknet"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+testing = ["dep:testcontainers"]
+
+[dependencies]
+async-trait = { workspace = true }
+futures = { workspace = true }
+paymaster-common = { path = "../paymaster-common" }
+indexmap = { workspace = true }
+starknet = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
+reqwest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
+chrono = { workspace = true }
+testcontainers = { workspace = true, optional = true }
+tracing = { workspace = true, features = ['attributes'] }
+uuid = { workspace = true }
