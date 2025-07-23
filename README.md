@@ -89,7 +89,7 @@ await account.execute([...], {
 
 ## 🧩 Contracts
 
- Contracts are available at : [Contacts](https://github.com/avnu-labs/avnu-paymaster/blob/contracts)
+ Contracts are available at : [Contacts](https://github.com/avnu-labs/paymaster/tree/main/contracts)
 
 ## 🛠 Contributing
 
