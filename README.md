@@ -5,7 +5,7 @@
 Open-source. Production-ready. Fully extensible.
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Docs](https://img.shields.io/badge/docs-available-green)](https://doc.avnu.fi/avnu-paymaster/)
+[![Docs](https://img.shields.io/badge/docs-available-green)]([https://doc.avnu.fi/avnu-paymaster/](https://docs.out-of-gas.xyz/docs/introduction))
 [![Build](https://img.shields.io/github/actions/workflow/status/avnu-labs/paymaster/main.yml)](https://github.com/avnu-labs/paymaster/actions)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/avnu_developers)
 
@@ -81,11 +81,11 @@ await account.execute([...], {
   }
 });
 ```
-🔗 [Full Integration Guide →]()
+🔗 [Full Integration Guide →](https://docs.out-of-gas.xyz/docs/dapp-integration)
 
 ## 📖 Documentation
 
-📚 Full documentation available at: [https://doc.avnu.fi/avnu-paymaster](https://doc.avnu.fi/avnu-paymaster)
+📚 Full documentation available at: [[https://doc.avnu.fi/avnu-paymaster](https://docs.out-of-gas.xyz/docs/introduction)]
 
 ## 🧩 Contracts
 
@@ -111,8 +111,8 @@ The AVNU Paymaster is licensed under the **GNU Affero General Public License v3.
 
 Useful links:
 
-- [Tips & Tricks](https://avnu-uand.readme.io/docs/good-to-kow#/)
-- [Glossary](https://avnu-uand.readme.io/docs/glossary#/)
+- [Tips & Tricks](https://docs.out-of-gas.xyz/docs/good-to-kow)
+- [Glossary](https://docs.out-of-gas.xyz/docs/glossary)
 
 Join our dev community: 📲 [https://t.me/avnu_developers](https://t.me/avnu_developers)
 
