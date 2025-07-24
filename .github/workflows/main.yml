@@ -23,6 +23,13 @@ jobs:
         with:
           command: check
 
+      # Clippy
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all
+
       # Format
       - name: Cargo fmt
         uses: actions-rs/cargo@v1
