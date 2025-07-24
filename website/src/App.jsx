@@ -1,48 +1,10 @@
-import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { Github, Send } from 'lucide-react';
 import { appConfig } from '@/config/app-config';
 
 function App() {
   return (
-    <>
-      <Helmet>
-        {/* Basic Meta Tags */}
-        <title>{appConfig.seo.title}</title>
-        <meta name="description" content={appConfig.description} />
-        <meta name="keywords" content={appConfig.seo.keywords} />
-        <meta name="author" content={appConfig.seo.author} />
-        <meta name="robots" content={appConfig.seo.robots} />
-        <link rel="canonical" href={appConfig.seo.canonical} />
-        <meta name="theme-color" content={appConfig.seo.themeColor} />
-
-        {/* Open Graph Meta Tags */}
-        <meta property="og:title" content={appConfig.seo.title} />
-        <meta property="og:description" content={appConfig.description} />
-        <meta property="og:type" content={appConfig.seo.og.type} />
-        <meta property="og:url" content={appConfig.seo.url} />
-        <meta property="og:site_name" content={appConfig.seo.siteName} />
-        <meta property="og:image" content={appConfig.seo.og.image} />
-        <meta property="og:image:alt" content={appConfig.seo.og.imageAlt} />
-        <meta property="og:image:width" content={appConfig.seo.og.imageWidth} />
-        <meta property="og:image:height" content={appConfig.seo.og.imageHeight} />
-        <meta property="og:locale" content={appConfig.seo.locale} />
-
-        {/* Twitter Card Meta Tags */}
-        <meta name="twitter:card" content={appConfig.seo.twitter.card} />
-        <meta name="twitter:site" content={appConfig.seo.twitter.site} />
-        <meta name="twitter:creator" content={appConfig.seo.twitter.creator} />
-        <meta name="twitter:title" content={appConfig.seo.title} />
-        <meta name="twitter:description" content={appConfig.description} />
-        <meta name="twitter:image" content={appConfig.seo.twitter.image} />
-
-        {/* Additional Meta Tags */}
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-      </Helmet>
-
-      <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-20 w-72 h-72 bg-[#3761F6]/20 rounded-full blur-3xl floating-animation"></div>
@@ -157,8 +119,7 @@ function App() {
             </div>
           </div>
         </motion.footer>
-      </div>
-    </>
+    </div>
   );
 }
 
