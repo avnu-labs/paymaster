@@ -50,18 +50,22 @@ website/
 ## 🔧 Configuration
 
 ### Links and URLs
+
 All external links and URLs are configured in `src/config/app-config.js`:
+
 - Documentation: https://docs.out-of-gas.xyz
 - GitHub: https://github.com/avnu-labs/paymaster
 - Telegram: https://t.me/avnu_fi
 
 ### SEO Optimization
+
 - Complete Open Graph tags for social sharing
 - Twitter Card meta tags
 - Structured data for search engines
 - Canonical URL configuration
 
 #### Open Graph Image
+
 - Location: `public/og-image.png`
 - Dimensions: 1200x630px (recommended for social media)
 - Used for link previews on social platforms
