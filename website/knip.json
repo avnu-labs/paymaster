@@ -2,18 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["src/main.jsx"],
   "project": ["src/**/*.{js,jsx,ts,tsx}"],
-  "ignoreDependencies": [
-    "@types/node"
-  ],
   "ignore": [
     "dist/**",
     "build/**",
     "public/**",
     "tools/**",
     "plugins/**"
-  ],
-  "ignoreBinaries": [
-    "node"
   ],
   "vite": {
     "config": ["vite.config.js"]
