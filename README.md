@@ -63,7 +63,7 @@ cargo run --bin paymaster-cli quick-setup \
 Then run your Paymaster:
 
 ```bash
-cargo run --release --bin paymaster-service --profile=path/to/my/my-profile.json
+cargo run --release --bin paymaster-service --profile=path/to/my-profile.json
 ```
 
 
