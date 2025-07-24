@@ -75,7 +75,7 @@ Supports both starknet.js and starknet-react:
 // Starknetjs example
 const paymasterRpc = new PaymasterRpc({ 
     nodeUrl: "https://sepolia.paymaster.avnu.fi",
-    headers: {'api-key': 'IF_NEEDED'},
+    headers: {'x-paymaster-api-key': 'IF_NEEDED'},
 });
 // const paymasterRpc = new PaymasterRpc({ default: true });
 const account = await WalletAccount.connect(STARKNET_PROVIDER, STARKNET_WINDOW_OBJECT_WALLET, undefined, paymasterRpc);
