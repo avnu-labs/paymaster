@@ -1,8 +1,0 @@
-node_modules
-dist
-build
-.yarn
-public
-vite.config.js
-postcss.config.js
-tailwind.config.js

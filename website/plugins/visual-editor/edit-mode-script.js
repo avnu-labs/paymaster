@@ -144,7 +144,7 @@ function getParentOrigin() {
   if (document.referrer) {
     try {
       return new URL(document.referrer).origin;
-    } catch (e) {
+    } catch {
       console.warn('Invalid referrer URL:', document.referrer);
     }
   }

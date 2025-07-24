@@ -377,7 +377,7 @@ export default function inlineEditPlugin() {
                 afterCode,
               })
             );
-          } catch (error) {
+          } catch {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Internal server error during edit application.' }));
           }
