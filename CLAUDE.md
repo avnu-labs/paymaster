@@ -58,6 +58,24 @@ cargo run -p paymaster-cli relayers-balance
 cargo run -p paymaster-cli relayers-rebalance
 ```
 
+#### Website
+```bash
+# Navigate to website directory
+cd website
+
+# Install dependencies
+yarn install
+
+# Run development server
+yarn run dev
+
+# Build for production
+yarn run build
+
+# Preview production build
+yarn run preview
+```
+
 ### Development Setup
 ```bash
 # Start Redis for development
@@ -79,6 +97,7 @@ docker-compose up -d
 7. **paymaster-sponsoring** - Sponsoring logic and webhook handling
 8. **paymaster-common** - Shared utilities, monitoring, and service management
 9. **paymaster-cli** - Command-line interface for setup and management
+10. **website** - Landing page with documentation links and useful resources
 
 ### Key Services
 

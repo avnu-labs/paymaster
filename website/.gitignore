@@ -1,0 +1,17 @@
+# Dossiers de dépendances
+/node_modules
+/packages
+
+# Dossiers de sortie de build
+/dist
+
+# Fichiers de configuration d'IDE
+.idea
+.vscode
+
+# Fichiers temporaires
+.DS_Store
+*.log
+*.tmp
+.env
+.env.*
