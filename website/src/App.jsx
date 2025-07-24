@@ -3,32 +3,15 @@ import React from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { Github, Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Toaster } from '@/components/ui/toaster';
-import { useToast } from '@/components/ui/use-toast';
+import { appConfig } from '@/config/app-config';
 
 function App() {
-  const { toast } = useToast();
-
-  const handleDocAccess = () => {
-    toast({
-      title: "🚧 This feature isn't implemented yet—but don't worry! You can request it in your next prompt! 🚀",
-      duration: 4000,
-    });
-  };
-
-  const handleSocialClick = (platform) => {
-    toast({
-      title: `🚧 ${platform} link isn't implemented yet—but don't worry! You can request it in your next prompt! 🚀`,
-      duration: 4000,
-    });
-  };
 
   return (
     <>
       <Helmet>
-        <title>BlockchainGas - Out of Gas? We've Got You Covered</title>
-        <meta name="description" content="Revolutionary blockchain service providing instant gas solutions for your transactions. Never run out of gas again with our cutting-edge technology." />
+        <title>{appConfig.appName} - {appConfig.tagline}</title>
+        <meta name="description" content={appConfig.description} />
       </Helmet>
       
       <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
@@ -87,13 +70,14 @@ function App() {
               transition={{ duration: 0.8, delay: 0.8 }}
               className="pt-4"
             >
-              <Button
-                onClick={handleDocAccess}
-                size="lg"
-                className="bg-gradient-to-r from-[#3761F6] to-[#5B7FFF] hover:from-[#2E50D5] hover:to-[#4A6FEE] text-white font-semibold px-12 py-6 text-xl rounded-2xl pulse-glow transition-all duration-300 transform hover:scale-105 shadow-2xl border-0"
+              <a
+                href={appConfig.links.documentation}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-gradient-to-r from-[#3761F6] to-[#5B7FFF] hover:from-[#2E50D5] hover:to-[#4A6FEE] text-white font-semibold px-12 py-2 text-xl rounded-xl pulse-glow transition-all duration-300 transform hover:scale-105 shadow-2xl border-0"
               >
                 Access the doc
-              </Button>
+              </a>
             </motion.div>
           </motion.div>
         </main>
@@ -108,33 +92,36 @@ function App() {
           <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
             {/* Social Links */}
             <div className="flex items-center space-x-6 mb-4 sm:mb-0">
-              <motion.button
-                onClick={() => handleSocialClick('GitHub')}
+              <motion.a
+                href={appConfig.links.github}
+                target="_blank"
+                rel="noopener noreferrer"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-3 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-all duration-300 shadow-lg"
+                className="text-gray-400 hover:text-white transition-colors duration-300"
               >
-                <Github className="w-6 h-6 text-gray-300" />
-              </motion.button>
+                <Github className="w-6 h-6" />
+              </motion.a>
               
-              <motion.button
-                onClick={() => handleSocialClick('Telegram')}
+              <motion.a
+                href={appConfig.links.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-3 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-all duration-300 shadow-lg"
+                className="text-gray-400 hover:text-white transition-colors duration-300"
               >
-                <Send className="w-6 h-6 text-gray-300" />
-              </motion.button>
+                <Send className="w-6 h-6" />
+              </motion.a>
             </div>
 
             {/* Copyright */}
             <div className="text-gray-400 text-sm font-medium">
-              <span>© 2024 BlockchainGas. All rights reserved.</span>
+              <span>© {appConfig.copyright.year} {appConfig.copyright.name}. {appConfig.copyright.text}</span>
             </div>
           </div>
         </motion.footer>
 
-        <Toaster />
       </div>
     </>
   );
