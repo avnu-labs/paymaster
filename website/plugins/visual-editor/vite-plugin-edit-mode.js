@@ -19,14 +19,14 @@ export default function inlineEditDevPlugin() {
           tag: 'script',
           attrs: { type: 'module' },
           children: scriptContent,
-          injectTo: 'body'
+          injectTo: 'body',
         },
         {
           tag: 'style',
           children: EDIT_MODE_STYLES,
-          injectTo: 'head'
-        }
+          injectTo: 'head',
+        },
       ];
-    }
+    },
   };
 }

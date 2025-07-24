@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
@@ -6,7 +5,6 @@ import { Github, Send } from 'lucide-react';
 import { appConfig } from '@/config/app-config';
 
 function App() {
-
   return (
     <>
       <Helmet>
@@ -18,7 +16,7 @@ function App() {
         <meta name="robots" content={appConfig.seo.robots} />
         <link rel="canonical" href={appConfig.seo.canonical} />
         <meta name="theme-color" content={appConfig.seo.themeColor} />
-        
+
         {/* Open Graph Meta Tags */}
         <meta property="og:title" content={appConfig.seo.title} />
         <meta property="og:description" content={appConfig.description} />
@@ -30,7 +28,7 @@ function App() {
         <meta property="og:image:width" content={appConfig.seo.og.imageWidth} />
         <meta property="og:image:height" content={appConfig.seo.og.imageHeight} />
         <meta property="og:locale" content={appConfig.seo.locale} />
-        
+
         {/* Twitter Card Meta Tags */}
         <meta name="twitter:card" content={appConfig.seo.twitter.card} />
         <meta name="twitter:site" content={appConfig.seo.twitter.site} />
@@ -38,19 +36,25 @@ function App() {
         <meta name="twitter:title" content={appConfig.seo.title} />
         <meta name="twitter:description" content={appConfig.description} />
         <meta name="twitter:image" content={appConfig.seo.twitter.image} />
-        
+
         {/* Additional Meta Tags */}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
       </Helmet>
-      
+
       <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-20 w-72 h-72 bg-[#3761F6]/20 rounded-full blur-3xl floating-animation"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-[#5B7FFF]/15 rounded-full blur-3xl floating-animation" style={{ animationDelay: '2s' }}></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-[#7B9AFF]/20 rounded-full blur-3xl floating-animation" style={{ animationDelay: '4s' }}></div>
+          <div
+            className="absolute bottom-20 right-20 w-96 h-96 bg-[#5B7FFF]/15 rounded-full blur-3xl floating-animation"
+            style={{ animationDelay: '2s' }}
+          ></div>
+          <div
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-[#7B9AFF]/20 rounded-full blur-3xl floating-animation"
+            style={{ animationDelay: '4s' }}
+          ></div>
         </div>
 
         {/* Main Content */}
@@ -58,7 +62,7 @@ function App() {
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: "easeOut" }}
+            transition={{ duration: 1, ease: 'easeOut' }}
             className="space-y-8"
           >
             {/* Main Headline */}
@@ -66,7 +70,7 @@ function App() {
               className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold text-white drop-shadow-2xl tech-font mb-12"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1.2, delay: 0.2, ease: "easeOut" }}
+              transition={{ duration: 1.2, delay: 0.2, ease: 'easeOut' }}
             >
               Out of gas?
             </motion.h1>
@@ -133,7 +137,7 @@ function App() {
               >
                 <Github className="w-6 h-6" />
               </motion.a>
-              
+
               <motion.a
                 href={appConfig.links.telegram}
                 target="_blank"
@@ -148,11 +152,12 @@ function App() {
 
             {/* Copyright */}
             <div className="text-gray-400 text-sm font-medium">
-              <span>© {appConfig.copyright.year} {appConfig.copyright.name}. {appConfig.copyright.text}</span>
+              <span>
+                © {appConfig.copyright.year} {appConfig.copyright.name}. {appConfig.copyright.text}
+              </span>
             </div>
           </div>
         </motion.footer>
-
       </div>
     </>
   );

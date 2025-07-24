@@ -1,12 +1,15 @@
-import { POPUP_STYLES, getPopupHTMLTemplate } from './plugins/visual-editor/visual-editor-config.js';
+import {
+  POPUP_STYLES,
+  getPopupHTMLTemplate,
+} from './plugins/visual-editor/visual-editor-config.js';
 
 const PLUGIN_APPLY_EDIT_API_URL = '/api/apply-edit';
 
 const ALLOWED_PARENT_ORIGINS = [
-	'https://horizons.hostinger.com',
-	'https://horizons.hostinger.dev',
-	'https://horizons-frontend-local.hostinger.dev',
-	'http://localhost:4000',
+  'https://horizons.hostinger.com',
+  'https://horizons.hostinger.dev',
+  'https://horizons-frontend-local.hostinger.dev',
+  'http://localhost:4000',
 ];
 
 let popupElement = null;
@@ -20,7 +23,7 @@ let translations = {
   cancel: 'Cancel',
   save: 'Save',
   addText: 'Add text',
-  disabledTooltipText: "This text can be changed only through chat."
+  disabledTooltipText: 'This text can be changed only through chat.',
 };
 
 let areStylesInjected = false;
@@ -44,16 +47,16 @@ function createPopup() {
 
   popupElement = document.createElement('div');
   popupElement.id = 'inline-editor-popup';
- 
+
   popupElement.innerHTML = getPopupHTMLTemplate(translations.save, translations.cancel);
   document.body.appendChild(popupElement);
- 
+
   popupTextarea = popupElement.querySelector('textarea');
   popupSaveButton = popupElement.querySelector('.save-button');
   popupCancelButton = popupElement.querySelector('.cancel-button');
 
   popupTextarea.placeholder = `${translations.addText}...`;
- 
+
   popupSaveButton.addEventListener('click', handlePopupSave);
   popupCancelButton.addEventListener('click', handlePopupCancel);
 }
@@ -74,21 +77,24 @@ function showPopup(targetElement, editId, currentText) {
   popupElement.classList.add('is-active');
   popupTextarea.focus();
 
- const parentOrigin = getParentOrigin();
- if (parentOrigin && ALLOWED_PARENT_ORIGINS.includes(parentOrigin)) {
-   window.parent.postMessage({
-     type: 'editEnter',
-   }, parentOrigin);
- }
+  const parentOrigin = getParentOrigin();
+  if (parentOrigin && ALLOWED_PARENT_ORIGINS.includes(parentOrigin)) {
+    window.parent.postMessage(
+      {
+        type: 'editEnter',
+      },
+      parentOrigin
+    );
+  }
 }
 
 function hidePopup() {
   if (popupElement) {
     popupElement.classList.remove('is-active');
     popupElement.classList.remove('is-disabled-view');
-   
-    if(popupTextarea) popupTextarea.style.display = 'none';
-    if(popupSaveButton) popupSaveButton.style.display = 'none';
+
+    if (popupTextarea) popupTextarea.style.display = 'none';
+    if (popupSaveButton) popupSaveButton.style.display = 'none';
   }
   currentEditingInfo = null;
 }
@@ -134,7 +140,7 @@ function getParentOrigin() {
   if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
     return window.location.ancestorOrigins[0];
   }
-  
+
   if (document.referrer) {
     try {
       return new URL(document.referrer).origin;
@@ -142,19 +148,19 @@ function getParentOrigin() {
       console.warn('Invalid referrer URL:', document.referrer);
     }
   }
-  
+
   return null;
 }
 
 async function handlePopupSave() {
   if (!currentEditingInfo) return;
-  
+
   const newText = popupTextarea.value
-  // Replacing characters that cause Babel parser to crash
+    // Replacing characters that cause Babel parser to crash
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/{/g, '&#123;')
-    .replace(/}/g, '&#125;')
+    .replace(/}/g, '&#125;');
 
   const { editId } = currentEditingInfo;
 
@@ -166,7 +172,7 @@ async function handlePopupSave() {
       },
       body: JSON.stringify({
         editId: editId,
-        newFullText: newText
+        newFullText: newText,
       }),
     });
 
@@ -174,15 +180,18 @@ async function handlePopupSave() {
     if (result.success) {
       const parentOrigin = getParentOrigin();
       if (parentOrigin && ALLOWED_PARENT_ORIGINS.includes(parentOrigin)) {
-        window.parent.postMessage({
-          type: 'editApplied',
-          payload: {
-            editId: editId,
-            fileContent: result.newFileContent,
-            beforeCode: result.beforeCode,
-            afterCode: result.afterCode,
-          }
-        }, parentOrigin);
+        window.parent.postMessage(
+          {
+            type: 'editApplied',
+            payload: {
+              editId: editId,
+              fileContent: result.newFileContent,
+              beforeCode: result.beforeCode,
+              afterCode: result.afterCode,
+            },
+          },
+          parentOrigin
+        );
       } else {
         console.error('Unauthorized parent origin:', parentOrigin);
       }
@@ -197,12 +206,15 @@ async function handlePopupSave() {
 }
 
 function handlePopupCancel() {
- const parentOrigin = getParentOrigin();
- if (parentOrigin && ALLOWED_PARENT_ORIGINS.includes(parentOrigin)) {
-   window.parent.postMessage({
-     type: 'editCancel',
-   }, parentOrigin);
- }
+  const parentOrigin = getParentOrigin();
+  if (parentOrigin && ALLOWED_PARENT_ORIGINS.includes(parentOrigin)) {
+    window.parent.postMessage(
+      {
+        type: 'editCancel',
+      },
+      parentOrigin
+    );
+  }
 
   hidePopup();
 }
@@ -219,7 +231,7 @@ function showDisabledTooltip(targetElement) {
   if (!disabledTooltipElement) createDisabledTooltip();
 
   disabledTooltipElement.textContent = translations.disabledTooltipText;
-  
+
   if (!disabledTooltipElement.isConnected) {
     document.body.appendChild(disabledTooltipElement);
   }
@@ -230,20 +242,20 @@ function showDisabledTooltip(targetElement) {
   const rect = targetElement.getBoundingClientRect();
 
   // Ensures that tooltip is not off the screen with 5px margin
-  let newLeft = rect.left + window.scrollX + (rect.width / 2) - (tooltipWidth / 2);
+  let newLeft = rect.left + window.scrollX + rect.width / 2 - tooltipWidth / 2;
   let newTop = rect.bottom + window.scrollY + 5;
 
   if (newLeft < window.scrollX) {
-    newLeft = window.scrollX + 5; 
+    newLeft = window.scrollX + 5;
   }
   if (newLeft + tooltipWidth > window.innerWidth + window.scrollX) {
-    newLeft = window.innerWidth + window.scrollX - tooltipWidth - 5; 
+    newLeft = window.innerWidth + window.scrollX - tooltipWidth - 5;
   }
   if (newTop + tooltipHeight > window.innerHeight + window.scrollY) {
-    newTop = rect.top + window.scrollY - tooltipHeight - 5; 
+    newTop = rect.top + window.scrollY - tooltipHeight - 5;
   }
   if (newTop < window.scrollY) {
-    newTop = window.scrollY + 5; 
+    newTop = window.scrollY + 5;
   }
 
   disabledTooltipElement.style.left = `${newLeft}px`;
@@ -266,22 +278,22 @@ function handleDisabledElementLeave() {
 
 function enableEditMode() {
   document.getElementById('root')?.setAttribute('data-edit-mode-enabled', 'true');
-  
-  injectPopupStyles(); 
-  
+
+  injectPopupStyles();
+
   if (!globalEventHandlers) {
     globalEventHandlers = {
       mousedown: handleGlobalEvent,
       pointerdown: handleGlobalEvent,
-      click: handleGlobalEvent
+      click: handleGlobalEvent,
     };
-    
+
     Object.entries(globalEventHandlers).forEach(([eventType, handler]) => {
       document.addEventListener(eventType, handler, true);
     });
   }
-  
-  document.querySelectorAll('[data-edit-disabled]').forEach(el => {
+
+  document.querySelectorAll('[data-edit-disabled]').forEach((el) => {
     el.removeEventListener('mouseenter', handleDisabledElementHover);
     el.addEventListener('mouseenter', handleDisabledElementHover);
     el.removeEventListener('mouseleave', handleDisabledElementLeave);
@@ -301,21 +313,21 @@ function disableEditMode() {
     });
     globalEventHandlers = null;
   }
-  
-  document.querySelectorAll('[data-edit-disabled]').forEach(el => {
+
+  document.querySelectorAll('[data-edit-disabled]').forEach((el) => {
     el.removeEventListener('mouseenter', handleDisabledElementHover);
     el.removeEventListener('mouseleave', handleDisabledElementLeave);
   });
 }
 
-window.addEventListener("message", function(event) {
-  if (event.data?.type === "enable-edit-mode") {
+window.addEventListener('message', function (event) {
+  if (event.data?.type === 'enable-edit-mode') {
     if (event.data?.translations) {
-        translations = { ...translations, ...event.data.translations };
+      translations = { ...translations, ...event.data.translations };
     }
     enableEditMode();
   }
-  if (event.data?.type === "disable-edit-mode") {
+  if (event.data?.type === 'disable-edit-mode') {
     disableEditMode();
   }
-}); 
+});

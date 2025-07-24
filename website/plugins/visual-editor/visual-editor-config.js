@@ -84,7 +84,7 @@ export function getPopupHTMLTemplate(saveLabel, cancelLabel) {
       <button class="popup-button save-button">${saveLabel}</button>
     </div>
   `;
-};
+}
 
 export const EDIT_MODE_STYLES = `
   #root[data-edit-mode-enabled="true"] [data-edit-id] {

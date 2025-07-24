@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.yarn
+yarn.lock
+package-lock.json
+public
+*.min.js
+*.min.css
