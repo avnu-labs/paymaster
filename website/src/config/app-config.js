@@ -32,7 +32,7 @@ export const appConfig = {
     // Open Graph
     og: {
       type: 'website',
-      image: '/og-image.png', // Recommended: 1200x630px
+      image: 'https://out-of-gas.xyz/og-image.png', // Recommended: 1200x630px
       imageAlt: 'Paymaster - Abstract Gas Fees on Starknet',
       imageWidth: 1200,
       imageHeight: 630,
