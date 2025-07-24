@@ -7,6 +7,7 @@ Open-source. Production-ready. Fully extensible.
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Docs](https://img.shields.io/badge/docs-available-green)]([https://doc.avnu.fi/avnu-paymaster/](https://docs.out-of-gas.xyz/docs/introduction))
 [![Build](https://img.shields.io/github/actions/workflow/status/avnu-labs/paymaster/main.yml)](https://github.com/avnu-labs/paymaster/actions)
+[![codecov](https://codecov.io/gh/avnu-labs/paymaster/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/avnu-labs/paymaster)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/avnu_developers)
 
 Sponsor gas fees, accept any token, and control every detail of the gas experience.
