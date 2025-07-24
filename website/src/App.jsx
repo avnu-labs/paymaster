@@ -57,11 +57,34 @@ function App() {
               Out of gas?
             </motion.h1>
 
+            {/* Centered Video */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1, delay: 0.4 }}
+              className="relative my-8 w-full max-w-3xl mx-auto"
+            >
+              <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+                <video
+                  src="/avnu_paymaster.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover rounded-2xl"
+                  style={{ boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)' }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+                <div className="absolute inset-0 rounded-2xl pointer-events-none bg-gradient-to-t from-black/20 to-transparent"></div>
+              </div>
+            </motion.div>
+
             {/* CTA Button */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
+              transition={{ duration: 0.8, delay: 0.8 }}
               className="pt-4"
             >
               <Button
