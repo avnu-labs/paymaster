@@ -1,5 +1,7 @@
 # Paymaster landing page
 
+This website serves as the primary landing page for the Paymaster service.
+
 ## 🚀 Quick Start
 
 ```bash
@@ -15,10 +17,6 @@ yarn build
 # Lint & format
 yarn format && yarn lint
 ```
-
-## 📋 Overview
-
-This website serves as the primary landing page for the Paymaster service, featuring:
 
 ## 🛠️ Tech Stack
 
