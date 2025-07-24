@@ -63,7 +63,7 @@ cargo run --bin paymaster-cli quick-setup \
 Then run your Paymaster:
 
 ```bash
-cargo run --release --bin paymaster-service --profile=my-profile
+cargo run --release --bin paymaster-service --profile=path/to/my/my-profile.json
 ```
 
 
@@ -72,24 +72,31 @@ cargo run --release --bin paymaster-service --profile=my-profile
 Supports both starknet.js and starknet-react:
 
 ```ts
-account.setPaymaster({ url: "https://paymaster.avnu.fi" });
-
-await account.execute([...], {
-  feeParams: {
-    type: "paymaster",
-    gasTokenAddress: "<USDC_TOKEN_ADDRESS>"
-  }
+// Starknetjs example
+const paymasterRpc = new PaymasterRpc({ 
+    nodeUrl: "https://sepolia.paymaster.avnu.fi",
+    headers: {'api-key': 'IF_NEEDED'},
 });
+// const paymasterRpc = new PaymasterRpc({ default: true });
+const account = await WalletAccount.connect(STARKNET_PROVIDER, STARKNET_WINDOW_OBJECT_WALLET, undefined, paymasterRpc);
+
+const result = await account.executePaymasterTransaction(
+  [CALLS], 
+  { feeMode: { mode: "default", gasToken: "<GAS_TOKEN_ADDRESS>" } }
+);
+
+const { transaction_hash } = result;
 ```
-🔗 [Full Integration Guide →](https://docs.out-of-gas.xyz/docs/dapp-integration)
+
+🔗 [Full Integration Guide available here](https://docs.out-of-gas.xyz/docs/dapp-integration)
 
 ## 📖 Documentation
 
-📚 Full documentation available at: [[https://doc.avnu.fi/avnu-paymaster](https://docs.out-of-gas.xyz/docs/introduction)]
+📚 [Full documentation available here](https://docs.out-of-gas.xyz)
 
 ## 🧩 Contracts
 
- Contracts are available at : [Contacts](https://github.com/avnu-labs/paymaster/tree/main/contracts)
+📝 [Contracts are available here](https://github.com/avnu-labs/paymaster/tree/main/contracts)
 
 ## 🛠 Contributing
 
