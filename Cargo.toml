@@ -41,7 +41,7 @@ simple_logger = "5.0.0"
 starknet = { git = "https://github.com/xJonathanLEI/starknet-rs", tag = "starknet/v0.16.0" }
 testcontainers = "0.23.3"
 thiserror = "2.0.11"
-tokio = "1.43.0"
+tokio = "1.47.1"
 tower = "0.4"
 tower-http = "0.5"
 tracing = "0.1.41"
