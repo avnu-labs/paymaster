@@ -15,21 +15,43 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_KEY }}
-      - name: Build and push paymaster service image
+      - name: Build and push paymaster distroless service image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/paymaster.dockerfile
           push: true
+          target: distroless
           tags: |
             avnulabs/paymaster:${{ github.ref_name }}
             avnulabs/paymaster:latest
-      - name: Build and push paymaster CLI image
+      - name: Build and push paymaster debian service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/paymaster.dockerfile
+          push: true
+          target: debian
+          tags: |
+            avnulabs/paymaster:${{ github.ref_name }}-debian
+            avnulabs/paymaster:latest-debian
+      - name: Build and push paymastr CLI distroless image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/cli.dockerfile
           push: true
+          target: distroless
           tags: |
             avnulabs/paymaster-cli:${{ github.ref_name }}
             avnulabs/paymaster-cli:latest
+      - name: Build and push CLI debian image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/cli.dockerfile
+          push: true
+          target: debian
+          tags: |
+            avnulabs/paymaster-cli:${{ github.ref_name }}-debian
+            avnulabs/paymaster-cli:latest-debian

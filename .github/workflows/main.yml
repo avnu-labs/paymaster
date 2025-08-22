@@ -85,5 +85,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./docker/paymaster.dockerfile
+          target: distroless
           push: true
-          tags: avnulabs/paymaster:${{ github.sha }}
+          tags: avnulabs/paymaster-dev:${{ github.sha }}
