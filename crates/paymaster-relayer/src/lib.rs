@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use paymaster_common::service::TokioServiceManager;
 use starknet::accounts::Account;
-use starknet::core::types::Felt;
 use thiserror::Error;
 use tracing::debug;
 
@@ -23,7 +22,6 @@ pub use rebalancing::RelayerManagerConfiguration;
 
 use crate::monitoring::availability::EnabledRelayersService;
 use crate::monitoring::balance::RelayerBalanceMonitoring;
-use crate::monitoring::transaction::RelayerTransactionMonitoring;
 
 mod monitoring;
 pub mod rebalancing;
@@ -62,11 +60,6 @@ pub enum Error {
     Execution(String),
 }
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    Transaction { relayer: Felt, transaction_hash: Felt },
-}
-
 #[derive(Clone)]
 pub struct RelayerManager {
     context: Context,
@@ -81,7 +74,6 @@ impl RelayerManager {
 
         let mut services = TokioServiceManager::new(context.clone());
         services.spawn::<RelayerBalanceMonitoring>();
-        services.spawn::<RelayerTransactionMonitoring>();
         services.spawn::<EnabledRelayersService>();
 
         // Start the rebalancing service if configured

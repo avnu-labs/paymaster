@@ -6,9 +6,9 @@ use paymaster_common::service::fallback::{Error, FailurePredicate, WithFallback}
 use starknet::core::types::{
     BlockHashAndNumber, BlockId, BroadcastedDeclareTransaction, BroadcastedDeployAccountTransaction, BroadcastedInvokeTransaction, BroadcastedTransaction,
     ConfirmedBlockId, ContractClass, ContractStorageKeys, DeclareTransactionResult, DeployAccountTransactionResult, EventFilter, EventsPage, FeeEstimate, Felt,
-    FunctionCall, Hash256, InvokeTransactionResult, MaybePendingBlockWithReceipts, MaybePendingBlockWithTxHashes, MaybePendingBlockWithTxs, MaybePendingStateUpdate,
-    MessageWithStatus, MsgFromL1, SimulatedTransaction, SimulationFlag, SimulationFlagForEstimateFee, StorageProof, SyncStatusType, Transaction,
-    TransactionReceiptWithBlockInfo, TransactionStatus, TransactionTrace, TransactionTraceWithHash,
+    FunctionCall, Hash256, InvokeTransactionResult, MaybePreConfirmedBlockWithReceipts, MaybePreConfirmedBlockWithTxHashes, MaybePreConfirmedBlockWithTxs,
+    MaybePreConfirmedStateUpdate, MessageFeeEstimate, MessageStatus, MsgFromL1, SimulatedTransaction, SimulationFlag, SimulationFlagForEstimateFee, StorageProof,
+    SyncStatusType, Transaction, TransactionReceiptWithBlockInfo, TransactionStatus, TransactionTrace, TransactionTraceWithHash,
 };
 use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClientError};
 use starknet::providers::{JsonRpcClient, Provider, ProviderError, ProviderRequestData, ProviderResponseData, Url};
@@ -97,7 +97,7 @@ impl Provider for StarknetClient {
 
     /// Gets block information with transaction hashes given the block id.
     #[instrument(name = "get_block_with_tx_hashes", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_tx_hashes<B>(&self, block_id: B) -> Result<MaybePendingBlockWithTxHashes, ProviderError>
+    async fn get_block_with_tx_hashes<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithTxHashes, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
@@ -106,7 +106,7 @@ impl Provider for StarknetClient {
 
     /// Gets block information with full transactions given the block id.
     #[instrument(name = "get_block_with_txs", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_txs<B>(&self, block_id: B) -> Result<MaybePendingBlockWithTxs, ProviderError>
+    async fn get_block_with_txs<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithTxs, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
@@ -115,7 +115,7 @@ impl Provider for StarknetClient {
 
     /// Gets block information with full transactions and receipts given the block id.
     #[instrument(name = "get_block_with_receipts", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_receipts<B>(&self, block_id: B) -> Result<MaybePendingBlockWithReceipts, ProviderError>
+    async fn get_block_with_receipts<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithReceipts, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
@@ -124,7 +124,7 @@ impl Provider for StarknetClient {
 
     /// Gets the information about the result of executing the requested block.
     #[instrument(name = "get_state_update", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_state_update<B>(&self, block_id: B) -> Result<MaybePendingStateUpdate, ProviderError>
+    async fn get_state_update<B>(&self, block_id: B) -> Result<MaybePreConfirmedStateUpdate, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
@@ -143,7 +143,7 @@ impl Provider for StarknetClient {
     }
 
     #[instrument(name = "get_messages_status", skip(self))]
-    async fn get_messages_status(&self, transaction_hash: Hash256) -> Result<Vec<MessageWithStatus>, ProviderError> {
+    async fn get_messages_status(&self, transaction_hash: Hash256) -> Result<Vec<MessageStatus>, ProviderError> {
         call_with_fallback!(self.get_messages_status(transaction_hash))
     }
 
@@ -247,7 +247,7 @@ impl Provider for StarknetClient {
 
     /// Estimates the fee for sending an L1-to-L2 message.
     #[instrument(name = "estimate_message_fee", skip(self, message, block_id), fields(message = ?message.as_ref(), block_id = ?block_id.as_ref()))]
-    async fn estimate_message_fee<M, B>(&self, message: M, block_id: B) -> Result<FeeEstimate, ProviderError>
+    async fn estimate_message_fee<M, B>(&self, message: M, block_id: B) -> Result<MessageFeeEstimate, ProviderError>
     where
         M: AsRef<MsgFromL1> + Send + Sync,
         B: AsRef<BlockId> + Send + Sync,
@@ -364,7 +364,7 @@ impl Provider for StarknetClient {
     #[instrument(name = "trace_block_transactions", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
     async fn trace_block_transactions<B>(&self, block_id: B) -> Result<Vec<TransactionTraceWithHash>, ProviderError>
     where
-        B: AsRef<BlockId> + Send + Sync,
+        B: AsRef<ConfirmedBlockId> + Send + Sync,
     {
         call_with_fallback!(self.trace_block_transactions(block_id))
     }

@@ -31,7 +31,7 @@ pub enum Error {
 impl From<paymaster_starknet::Error> for Error {
     fn from(value: paymaster_starknet::Error) -> Self {
         match value {
-            paymaster_starknet::Error::InvalidNonce => Self::InvalidVersion,
+            paymaster_starknet::Error::InvalidNonce(_) => Self::InvalidVersion,
             e => Self::Execution(e.to_string()),
         }
     }

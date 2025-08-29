@@ -31,7 +31,7 @@ impl DeployTransaction {
 
     pub async fn execute(self, account: &StarknetAccount) -> Result<(Felt, Felt), Error> {
         let (contract, calls) = self.build().await?;
-        let estimated_calls = calls.estimate(account).await.unwrap();
+        let estimated_calls = calls.estimate(account, None).await.unwrap();
 
         let nonce = account.get_nonce().await.unwrap();
         let result = estimated_calls.execute(account, nonce).await.unwrap();

@@ -12,11 +12,8 @@ pub async fn wait_for_transaction_success(starknet: &Client, tx_hash: Felt, max_
                 info!("Transaction succeeded: {}", tx_hash.to_fixed_hex_string());
                 return Ok(());
             },
-            Ok(TransactionStatus::Rejected { reason: _reason }) => {
-                return Err(Error::Execution(format!("Transaction was rejected: {}", tx_hash.to_fixed_hex_string())));
-            },
             // Do nothing, we will retry
-            Ok(TransactionStatus::Received) => {},
+            Ok(TransactionStatus::Received) | Ok(TransactionStatus::Candidate) | Ok(TransactionStatus::PreConfirmed(_)) => {},
             Err(_) => {},
         }
         // If we can't get rejected or accepted status, wait and retry (might be temporary network issue)

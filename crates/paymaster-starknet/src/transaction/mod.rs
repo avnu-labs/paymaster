@@ -1,8 +1,7 @@
-use std::ops::Deref;
-
 use starknet::core::types::typed_data::{Domain, ElementTypeReference, FullTypeReference, InlineTypeReference, Revision, Types, Value};
 use starknet::core::types::{Call, Felt, TypedData};
 use starknet::core::utils::cairo_short_string_to_felt;
+use std::ops::Deref;
 
 use crate::types::TypeBuilder;
 use crate::values::decoding::{DecodeFromTypedValue, TypedValueDecoder};

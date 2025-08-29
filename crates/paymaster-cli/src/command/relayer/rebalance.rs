@@ -160,7 +160,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
 
     let master_account_nonce = master_account.get_nonce().await.unwrap();
 
-    let estimated_calls = match multi_calls.estimate(&master_account).await {
+    let estimated_calls = match multi_calls.estimate(&master_account, None).await {
         Ok(calls) => calls,
         Err(e) => {
             error!("❌ Failed to estimate calls: {:?}", e);

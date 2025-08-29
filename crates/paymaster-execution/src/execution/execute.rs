@@ -78,7 +78,7 @@ impl ExecutableTransaction {
     /// Estimate a sponsored transaction which is a transaction that will be paid by the relayer
     pub async fn estimate_sponsored_transaction(self, client: &Client, sponsor_metadata: Vec<Felt>) -> Result<EstimatedExecutableTransaction, Error> {
         let calls = self.build_sponsored_calls(sponsor_metadata);
-        let estimated_calls = client.estimate(&calls).await?;
+        let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
 
         Ok(EstimatedExecutableTransaction(estimated_calls))
     }
@@ -93,7 +93,7 @@ impl ExecutableTransaction {
 
         let calls = self.build_calls(gas_token_transfer);
 
-        let estimated_calls = client.estimate(&calls).await?;
+        let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
         let fee_estimate = estimated_calls.estimate();
 
         // We recompute the real estimate fee. Validation step is not included in the fee estimate
@@ -217,7 +217,7 @@ mod tests {
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
     use crate::execution::deploy::DeploymentParameters;
     use crate::execution::execute::{ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
-    use crate::execution::{ExecutionParameters, FeeMode};
+    use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::{an_eth_approve, an_eth_transfer};
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
 
@@ -255,7 +255,7 @@ mod tests {
 
             transaction: ExecutableTransactionParameters::Deploy { deployment },
             parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Sponsored,
+                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
                 time_bounds: None,
             },
         };
@@ -285,6 +285,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -312,6 +313,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -362,6 +364,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -390,6 +393,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },

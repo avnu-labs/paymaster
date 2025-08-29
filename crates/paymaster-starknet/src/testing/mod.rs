@@ -85,7 +85,7 @@ impl TestEnvironment {
     }
 
     async fn start_starknet() -> StarknetContainer {
-        GenericImage::new("avnulabs/paymaster-ci-starknet", "0.4.2")
+        GenericImage::new("avnulabs/paymaster-ci-starknet", "0.5.0")
             .with_exposed_port(5050.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Starknet Devnet"))
             .start()

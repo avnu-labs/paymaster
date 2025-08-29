@@ -7,7 +7,7 @@ use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::typed_data::TypedDataError;
 use starknet::core::types::SimulationFlagForEstimateFee::SkipValidate;
 use starknet::core::types::{
-    BlockId, BlockTag, BroadcastedTransaction, ContractExecutionError, FeeEstimate, Felt, FunctionCall, MaybePendingBlockWithTxs, StarknetError, Transaction,
+    BlockId, BlockTag, BroadcastedTransaction, ContractExecutionError, FeeEstimate, Felt, FunctionCall, MaybePreConfirmedBlockWithTxs, StarknetError, Transaction,
     TransactionReceiptWithBlockInfo, TransactionStatus,
 };
 use starknet::macros::selector;
@@ -81,8 +81,8 @@ pub enum Error {
     #[error("missing gas fee transfer")]
     MissingGasFeeTransferCall,
 
-    #[error("invalid nonce")]
-    InvalidNonce,
+    #[error("invalid nonce {0}")]
+    InvalidNonce(String),
 
     #[error("invalid paymaster version")]
     InvalidVersion,
@@ -112,7 +112,7 @@ pub enum Error {
 impl From<ProviderError> for Error {
     fn from(value: ProviderError) -> Self {
         match value {
-            ProviderError::StarknetError(StarknetError::InvalidTransactionNonce) => Error::InvalidNonce,
+            ProviderError::StarknetError(StarknetError::InvalidTransactionNonce(value)) => Error::InvalidNonce(value),
             ProviderError::StarknetError(StarknetError::TransactionExecutionError(e)) => Error::Execution(e.execution_error),
             ProviderError::StarknetError(StarknetError::ContractError(e)) => Error::Execution(e.revert_error),
             ProviderError::StarknetError(StarknetError::ContractNotFound) => Error::ContractNotFound,
@@ -183,7 +183,7 @@ impl Client {
         let signing_key = LocalWallet::from_signing_key(SigningKey::from_secret_scalar(account.private_key));
 
         let mut account = StarknetAccount::new(self.inner.clone(), signing_key, account.address, self.chain_id.as_felt(), ExecutionEncoding::New);
-        account.set_block_id(BlockId::Tag(BlockTag::Pending));
+        account.set_block_id(BlockId::Tag(BlockTag::PreConfirmed));
         account
     }
 
@@ -205,14 +205,23 @@ impl Client {
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "fetch_block_gas_price");
 
         let prices = match result? {
-            MaybePendingBlockWithTxs::Block(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
-            MaybePendingBlockWithTxs::PendingBlock(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
+            MaybePreConfirmedBlockWithTxs::Block(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
+            MaybePreConfirmedBlockWithTxs::PreConfirmedBlock(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
         };
 
         Ok(BlockGasPrice {
             computation: prices.0,
             storage: prices.1,
         })
+    }
+
+    /// Fetch the median tip at the latest block
+    #[instrument(name = "fetch_block_median_tip", skip(self))]
+    pub async fn fetch_block_median_tip(&self) -> Result<u64, Error> {
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await));
+        metric!(histogram[starknet_rpc] = duration.as_millis(), method = "fetch_block_median_tip");
+        metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "fetch_block_median_tip");
+        Ok(result?.median_tip())
     }
 
     /// Call `balance_of(recipient)` on the given `token` address
@@ -224,7 +233,7 @@ impl Client {
             calldata: vec![recipient],
         };
 
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.call(call, BlockId::Tag(BlockTag::Pending)).await));
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.call(call, BlockId::Tag(BlockTag::PreConfirmed)).await));
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "token_balance_of");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "token_balance_of");
@@ -235,7 +244,7 @@ impl Client {
     /// Fetch the nonce of the given `user`
     #[instrument(name = "fetch_nonce", skip(self))]
     pub async fn fetch_nonce(&self, user: ContractAddress) -> Result<Felt, Error> {
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_nonce(BlockId::Tag(BlockTag::Pending), user).await));
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_nonce(BlockId::Tag(BlockTag::PreConfirmed), user).await));
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "get_nonce");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "get_nonce");
@@ -246,7 +255,7 @@ impl Client {
     /// Execute the given `call`
     #[instrument(name = "call", skip(self))]
     pub async fn call(&self, call: &FunctionCall) -> Result<Vec<Felt>, Error> {
-        let block = BlockId::Tag(BlockTag::Pending);
+        let block = BlockId::Tag(BlockTag::PreConfirmed);
         let (result, duration) = measure_duration!(log_if_error!(self.inner.call(call, block).await));
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "call");
@@ -258,7 +267,7 @@ impl Client {
     /// Estimates the `transactions` and returns their [`FeeEstimate`]
     #[instrument(name = "estimate_transactions", skip(self))]
     pub async fn estimate_transactions(&self, transactions: &[BroadcastedTransaction]) -> Result<Vec<FeeEstimate>, Error> {
-        let block = BlockId::Tag(BlockTag::Pending);
+        let block = BlockId::Tag(BlockTag::PreConfirmed);
 
         // Estimate fees
         let (result, duration) = measure_duration!(log_if_error!(self.inner.estimate_fee(transactions, vec![SkipValidate], block).await));

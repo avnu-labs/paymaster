@@ -12,7 +12,7 @@ pub struct InvokeTransaction {
 impl InvokeTransaction {
     pub async fn execute(self, account: &StarknetAccount) {
         let calls = Calls::new(vec![self.as_call()]);
-        let estimated_calls = calls.estimate(account).await.unwrap();
+        let estimated_calls = calls.estimate(account, None).await.unwrap();
 
         let nonce = account.get_nonce().await.unwrap();
         estimated_calls.execute(account, nonce).await.unwrap();

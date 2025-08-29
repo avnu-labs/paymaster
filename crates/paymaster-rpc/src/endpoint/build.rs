@@ -218,7 +218,7 @@ mod tests {
     use starknet::core::types::Felt;
 
     use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, InvokeParameters, TransactionParameters};
-    use crate::endpoint::common::{ExecutionParameters, FeeMode};
+    use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
     use crate::endpoint::RequestContext;
     use crate::testing::TestEnvironment;
     use crate::Error;
@@ -262,6 +262,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -284,7 +285,10 @@ mod tests {
                 },
             },
             parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Default { gas_token: Felt::ZERO },
+                fee_mode: FeeMode::Default {
+                    gas_token: Felt::ZERO,
+                    tip: TipPriority::Normal,
+                },
                 time_bounds: None,
             },
         };
@@ -312,6 +316,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },

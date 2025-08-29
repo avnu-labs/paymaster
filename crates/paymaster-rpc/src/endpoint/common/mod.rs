@@ -119,20 +119,37 @@ impl From<TimeBounds> for paymaster_execution::TimeBounds {
     }
 }
 
+#[derive(Serialize, Deserialize, Copy, Default, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum TipPriority {
+    Slow,
+    #[default]
+    Normal,
+    Fast,
+    Custom(u64),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum FeeMode {
     /// Standard fee mode when the user pays in the given token
-    Default { gas_token: Felt },
+    Default {
+        gas_token: Felt,
+        #[serde(default)]
+        tip: TipPriority,
+    },
     /// Sponsored fee mode where the provider pays for the user transaction
-    Sponsored,
+    Sponsored {
+        #[serde(default)]
+        tip: TipPriority,
+    },
 }
 
 impl From<paymaster_execution::FeeMode> for FeeMode {
     fn from(value: paymaster_execution::FeeMode) -> Self {
         match value {
-            paymaster_execution::FeeMode::Sponsored => Self::Sponsored,
-            paymaster_execution::FeeMode::Default { gas_token } => Self::Default { gas_token },
+            paymaster_execution::FeeMode::Sponsored { tip } => Self::Sponsored { tip: tip.into() },
+            paymaster_execution::FeeMode::Default { gas_token, tip } => Self::Default { gas_token, tip: tip.into() },
         }
     }
 }
@@ -140,23 +157,52 @@ impl From<paymaster_execution::FeeMode> for FeeMode {
 impl From<FeeMode> for paymaster_execution::FeeMode {
     fn from(value: FeeMode) -> Self {
         match value {
-            FeeMode::Sponsored => Self::Sponsored,
-            FeeMode::Default { gas_token } => Self::Default { gas_token },
+            FeeMode::Sponsored { tip } => Self::Sponsored { tip: tip.into() },
+            FeeMode::Default { gas_token, tip } => Self::Default { gas_token, tip: tip.into() },
+        }
+    }
+}
+
+impl From<paymaster_execution::TipPriority> for TipPriority {
+    fn from(value: paymaster_execution::TipPriority) -> Self {
+        match value {
+            paymaster_execution::TipPriority::Slow => TipPriority::Slow,
+            paymaster_execution::TipPriority::Normal => TipPriority::Normal,
+            paymaster_execution::TipPriority::Fast => TipPriority::Fast,
+            paymaster_execution::TipPriority::Custom(x) => TipPriority::Custom(x),
+        }
+    }
+}
+
+impl From<TipPriority> for paymaster_execution::TipPriority {
+    fn from(value: TipPriority) -> Self {
+        match value {
+            TipPriority::Slow => paymaster_execution::TipPriority::Slow,
+            TipPriority::Normal => paymaster_execution::TipPriority::Normal,
+            TipPriority::Fast => paymaster_execution::TipPriority::Fast,
+            TipPriority::Custom(x) => paymaster_execution::TipPriority::Custom(x),
         }
     }
 }
 
 impl FeeMode {
     pub fn is_sponsored(&self) -> bool {
-        matches!(self, Self::Sponsored)
+        matches!(self, Self::Sponsored { tip: _ })
     }
 
     /// Returns the gas token corresponding to the  [`FeeMode`]. In the case where the transaction is sponsored
     /// the gas token is set as the STRK token
     pub fn gas_token(&self) -> Felt {
         match self {
-            Self::Default { gas_token } => *gas_token,
-            Self::Sponsored => Token::strk(&ChainID::Mainnet).address,
+            Self::Default { gas_token, tip: _ } => *gas_token,
+            Self::Sponsored { tip: _ } => Token::strk(&ChainID::Mainnet).address,
+        }
+    }
+
+    pub fn tip(&self) -> TipPriority {
+        match self {
+            Self::Default { gas_token: _, tip } => *tip,
+            Self::Sponsored { tip } => *tip,
         }
     }
 }

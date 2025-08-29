@@ -1,4 +1,6 @@
 mod execution;
+
+use std::cmp::max;
 use std::collections::HashSet;
 
 pub use execution::*;
@@ -135,10 +137,22 @@ impl Client {
     }
 
     /// Estimate the gas cost of a sequence of calls using the account configured for estimation
-    pub async fn estimate(&self, calls: &Calls) -> Result<EstimatedCalls, Error> {
-        let result = calls.estimate(&self.estimate_account).await?;
+    pub async fn estimate(&self, calls: &Calls, tip: TipPriority) -> Result<EstimatedCalls, Error> {
+        let tip = self.get_tip(tip).await?;
+        let result = calls.estimate(&self.estimate_account, Some(tip)).await?;
 
         Ok(result)
+    }
+
+    /// Get the tip value given a priority
+    pub async fn get_tip(&self, tip: TipPriority) -> Result<u64, Error> {
+        let tip: u64 = match tip {
+            TipPriority::Slow => max(self.starknet.fetch_median_tip().await? - 5, 0),
+            TipPriority::Normal => self.starknet.fetch_median_tip().await?,
+            TipPriority::Fast => self.starknet.fetch_median_tip().await? + 5,
+            TipPriority::Custom(tip) => tip,
+        };
+        Ok(tip)
     }
 
     pub fn compute_max_fee_in_strk(&self, base_estimate: Felt) -> Felt {

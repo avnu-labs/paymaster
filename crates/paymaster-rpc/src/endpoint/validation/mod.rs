@@ -52,7 +52,7 @@ mod tests {
     use paymaster_sponsoring::{Client as AuthenticationClient, Configuration, SelfConfiguration};
     use paymaster_starknet::constants::Token;
 
-    use crate::endpoint::common::{ExecutionParameters, FeeMode};
+    use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
     use crate::endpoint::validation::check_is_allowed_fee_mode;
     use crate::endpoint::RequestContext;
     use crate::middleware::APIKey;
@@ -79,10 +79,10 @@ mod tests {
         };
         
         let eth = Token::eth(&context.configuration.starknet.chain_id);
-        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address })).await.unwrap();
-        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Default { gas_token: eth.address })).await.unwrap();
-        assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored)).await.is_err());
-        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored)).await.unwrap();
+        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
+        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
+        assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.is_err());
+        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.unwrap();
     }
 
     #[tokio::test]
@@ -107,10 +107,10 @@ mod tests {
             RequestContext::new(&context, &extensions)
         };
         let eth = Token::eth(&context.configuration.starknet.chain_id);
-        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address })).await.unwrap();
-        check_is_allowed_fee_mode(&granted_api_key, &params(FeeMode::Default { gas_token: eth.address })).await.unwrap();
+        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
+        check_is_allowed_fee_mode(&granted_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
         
-        assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored)).await.is_err());
-        assert!(check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored)).await.is_err());
+        assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored { tip: TipPriority::Normal})).await.is_err());
+        assert!(check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.is_err());
     }
 }

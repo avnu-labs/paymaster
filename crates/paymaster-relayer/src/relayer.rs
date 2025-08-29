@@ -2,17 +2,15 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use paymaster_common::cache::ExpirableCache;
-use paymaster_common::service::messaging::Messages;
-use paymaster_common::{declare_message_identity, metric, send_message};
+use paymaster_common::{declare_message_identity, metric};
 use paymaster_starknet::transaction::EstimatedCalls;
 use paymaster_starknet::{Client, StarknetAccount, StarknetAccountConfiguration};
 use starknet::accounts::{Account, ConnectedAccount};
 use starknet::core::types::{BlockId, BlockTag, Felt, InvokeTransactionResult};
-use tracing;
 use tracing::warn;
 
 use crate::lock::RelayerLock;
-use crate::{Error, Message};
+use crate::Error;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RelayerConfiguration {
@@ -21,7 +19,6 @@ pub struct RelayerConfiguration {
 
 #[derive(Clone)]
 pub struct RelayerContext {
-    pub messages: Messages<Message>,
     pub balances: ExpirableCache<Felt, Felt>,
 }
 
@@ -42,13 +39,13 @@ impl Deref for Relayer {
 }
 
 impl Relayer {
-    pub fn new(starknet: &Client, messages: Messages<Message>, balances: ExpirableCache<Felt, Felt>, configuration: &RelayerConfiguration) -> Self {
+    pub fn new(starknet: &Client, balances: ExpirableCache<Felt, Felt>, configuration: &RelayerConfiguration) -> Self {
         let mut account = starknet.initialize_account(&configuration.account);
-        account.set_block_id(BlockId::Tag(BlockTag::Pending));
+        account.set_block_id(BlockId::Tag(BlockTag::PreConfirmed));
 
         Self {
             account,
-            context: RelayerContext { messages, balances },
+            context: RelayerContext { balances },
         }
     }
 
@@ -108,16 +105,12 @@ impl LockedRelayer {
         match result {
             Ok(value) => {
                 self.lock.nonce = Some(nonce + Felt::ONE);
-                send_message!(from: Relayer ; self.relayer.context.messages => Message::Transaction {
-                    relayer: self.relayer.account.address(),
-                    transaction_hash: value.transaction_hash
-                });
                 self.relayer
                     .update_relayer_balance(Felt::from(calls.estimate().overall_fee))
                     .await;
                 Ok(value)
             },
-            Err(paymaster_starknet::Error::InvalidNonce) => {
+            Err(paymaster_starknet::Error::InvalidNonce(_value)) => {
                 metric!(counter[relayer_request_error] = 1, method = "execute", error = "invalid_nonce");
 
                 self.invalidate_nonce();

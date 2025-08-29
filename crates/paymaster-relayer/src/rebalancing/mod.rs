@@ -195,7 +195,7 @@ impl Service for RelayerRebalancingService {
                 info!("Nothing to execute, skipping");
             } else {
                 // Handle estimation errors gracefully
-                let calls_estimate = match calls.estimate(&self.gas_tank).await {
+                let calls_estimate = match calls.estimate(&self.gas_tank, None).await {
                     Ok(estimate) => estimate,
                     Err(e) => {
                         error!("Failed to estimate calls for rebalancing, skip this round: {}", e);
@@ -402,7 +402,7 @@ impl RelayerRebalancingService {
             // If the swap succeeds, we add the calls to the multicall
             // If the swap succeeds, we add the min received to the accumulated gas swap result
             let calls_to_validate = Calls::new(swap_calls);
-            match calls_to_validate.estimate(&self.gas_tank).await {
+            match calls_to_validate.estimate(&self.gas_tank, None).await {
                 Ok(_calls_estimate) => {
                     calls.merge(&calls_to_validate);
                     accumulated_gas_swap_result += min_received;
@@ -1339,7 +1339,7 @@ mod integration_tests {
 
         // 5. Estimate and execute rebalancing calls
         println!("🔧 Estimating rebalancing transaction...");
-        let estimated_calls = rebalancing_calls.estimate(&gas_tank_account).await.unwrap();
+        let estimated_calls = rebalancing_calls.estimate(&gas_tank_account, None).await.unwrap();
 
         let gas_tank_nonce = gas_tank_account.get_nonce().await.unwrap();
         println!("📝 Executing rebalancing with nonce: {}", gas_tank_nonce);

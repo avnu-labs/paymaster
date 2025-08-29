@@ -78,8 +78,8 @@ pub struct Endpoint;
 impl Endpoint {
     pub const fn default_rpc_url(chain_id: &ChainID) -> &'static str {
         match chain_id {
-            ChainID::Sepolia => "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
-            ChainID::Mainnet => "https://starknet-mainnet.public.blastapi.io/rpc/v0_8",
+            ChainID::Sepolia => "https://starknet-sepolia.public.blastapi.io/rpc/v0_9",
+            ChainID::Mainnet => "https://starknet-mainnet.public.blastapi.io/rpc/v0_9",
         }
     }
 

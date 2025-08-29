@@ -6,6 +6,7 @@ use crate::Error;
 pub struct TransactionGasEstimate {
     pub overall_fee: u128,
     pub unit: PriceUnit,
+    tip: u64,
     l1_gas_consumed: u64,
     l1_gas_price: u128,
     l2_gas_consumed: u64,
@@ -16,14 +17,8 @@ pub struct TransactionGasEstimate {
     gas_price_estimate_multiplier: f64,
 }
 
-impl From<FeeEstimate> for TransactionGasEstimate {
-    fn from(value: FeeEstimate) -> Self {
-        Self::new(value)
-    }
-}
-
 impl TransactionGasEstimate {
-    pub fn new(estimate: FeeEstimate) -> Self {
+    pub fn new(estimate: FeeEstimate, tip: u64) -> Self {
         Self {
             overall_fee: estimate.overall_fee,
             l1_gas_price: estimate.l1_gas_price,
@@ -32,7 +27,8 @@ impl TransactionGasEstimate {
             l1_gas_consumed: estimate.l1_gas_consumed,
             l2_gas_consumed: estimate.l2_gas_consumed,
             l1_data_gas_consumed: estimate.l1_data_gas_consumed,
-            unit: estimate.unit,
+            tip,
+            unit: PriceUnit::Fri,
             gas_estimate_multiplier: 1.5,
             gas_price_estimate_multiplier: 1.5,
         }
@@ -54,11 +50,16 @@ impl TransactionGasEstimate {
             l1_data_gas_price: self.l1_data_gas_price,
             l1_gas_consumed: self.l1_gas_consumed,
             l2_gas_consumed,
+            tip: self.tip,
             l1_data_gas_consumed: self.l1_data_gas_consumed,
             unit: self.unit,
             gas_estimate_multiplier: self.gas_estimate_multiplier,
             gas_price_estimate_multiplier: self.gas_price_estimate_multiplier,
         }
+    }
+
+    pub fn tip(&self) -> u64 {
+        self.tip
     }
 
     pub fn l1_gas_consumed(&self) -> u64 {

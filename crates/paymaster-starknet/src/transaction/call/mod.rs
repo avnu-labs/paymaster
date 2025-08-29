@@ -1,12 +1,12 @@
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
-use starknet::accounts::Account;
-use starknet::accounts::AccountError::Provider;
+use starknet::accounts::{Account, AccountError, ConnectedAccount};
 use starknet::core::types::{
-    BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult, ResourceBounds, ResourceBoundsMapping,
+    BlockId, BlockTag, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult, ResourceBounds,
+    ResourceBoundsMapping,
 };
-use starknet::providers::ProviderError;
+use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
 use tracing::error;
 
@@ -54,10 +54,18 @@ impl Calls {
         EstimatedCalls { calls: self, estimate }
     }
 
-    pub async fn estimate(&self, account: &StarknetAccount) -> Result<EstimatedCalls, Error> {
-        let result = account.execute_v3(self.to_vec()).estimate_fee().await?;
+    pub async fn estimate(&self, account: &StarknetAccount, tip: Option<u64>) -> Result<EstimatedCalls, Error> {
+        let tip = match tip {
+            None => {
+                let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await?;
+                block.median_tip()
+            },
+            Some(tip) => tip,
+        };
 
-        Ok(self.clone().with_estimate(TransactionGasEstimate::new(result)))
+        let result = account.execute_v3(self.to_vec()).tip(tip).estimate_fee().await?;
+
+        Ok(self.clone().with_estimate(TransactionGasEstimate::new(result, tip)))
     }
 
     pub async fn execute(&self, account: &StarknetAccount, nonce: Felt) -> Result<InvokeTransactionResult, Error> {
@@ -74,7 +82,7 @@ impl Calls {
         self.0.push(other)
     }
 
-    pub fn as_transaction(&self, sender: Felt, nonce: Felt) -> BroadcastedTransaction {
+    pub fn as_transaction(&self, sender: Felt, nonce: Felt, tip: u64) -> BroadcastedTransaction {
         BroadcastedTransaction::Invoke(BroadcastedInvokeTransactionV3 {
             sender_address: sender,
             calldata: CalldataBuilder::new().encode(&self.0).build(),
@@ -95,8 +103,7 @@ impl Calls {
                     max_price_per_unit: 0,
                 },
             },
-            // Fee market has not been been activated yet so it's hard-coded to be 0
-            tip: 0,
+            tip,
             paymaster_data: vec![],
             account_deployment_data: vec![],
             nonce_data_availability_mode: DataAvailabilityMode::L1,
@@ -153,17 +160,18 @@ impl EstimatedCalls {
             .l2_gas_price(self.estimate.l2_gas_price()?)
             .l1_data_gas(self.estimate.l1_data_gas_consumed())
             .l1_data_gas_price(self.estimate.l1_data_gas_price()?)
+            .tip(self.estimate.tip())
             .send()
             .await;
 
         match &result {
-            Err(Provider(e @ ProviderError::RateLimited)) => {
+            Err(AccountError::Provider(e @ ProviderError::RateLimited)) => {
                 error!("{}", e);
             },
-            Err(Provider(e @ ProviderError::ArrayLengthMismatch)) => {
+            Err(AccountError::Provider(e @ ProviderError::ArrayLengthMismatch)) => {
                 error!("{}", e);
             },
-            Err(Provider(ProviderError::Other(error))) => {
+            Err(AccountError::Provider(ProviderError::Other(error))) => {
                 error!("{}", error);
             },
             _ => {},

@@ -92,18 +92,16 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use paymaster_common::send_message;
     use paymaster_starknet::constants::{Endpoint, Token};
     use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration, StarknetAccountConfiguration};
     use starknet::core::types::Felt;
     use starknet::macros::felt;
     use tokio::sync::RwLock;
-    use tokio::time;
 
     use crate::lock::mock::MockLockLayer;
     use crate::lock::LockLayerConfiguration;
     use crate::rebalancing::{OptionalRebalancingConfiguration, RelayerManagerConfiguration};
-    use crate::{Message, Relayer, RelayerManager, RelayersConfiguration};
+    use crate::RelayersConfiguration;
 
     #[derive(Default, Debug)]
     pub struct Lock(Arc<RwLock<LinkedList<Felt>>>);
@@ -146,19 +144,6 @@ mod tests {
                 lock: LockLayerConfiguration::mock_with_timeout::<Lock>(Duration::from_secs(5)),
                 rebalancing: OptionalRebalancingConfiguration::initialize(None),
             },
-        }
-    }
-
-    #[tokio::test]
-    async fn service_should_disable_relayer() {
-        let relayers = RelayerManager::new(&configuration());
-        send_message!(from: Relayer ; relayers.context.messages => Message::Transaction {
-            relayer: felt!("0x0"),
-            transaction_hash: felt!("0x0")
-        });
-
-        while relayers.check_enabled_relayers().await.is_ok() {
-            time::sleep(Duration::from_secs(1)).await
         }
     }
 }

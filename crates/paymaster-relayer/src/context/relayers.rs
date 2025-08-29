@@ -2,12 +2,11 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use paymaster_common::cache::ExpirableCache;
-use paymaster_common::service::messaging::Messages;
 use paymaster_starknet::{Client, StarknetAccountConfiguration};
 use starknet::core::types::Felt;
 
 use crate::relayer::Relayer;
-use crate::{Error, Message, RelayerConfiguration, RelayersConfiguration};
+use crate::{Error, RelayerConfiguration, RelayersConfiguration};
 
 #[derive(Clone)]
 pub struct Relayers {
@@ -17,7 +16,7 @@ pub struct Relayers {
 }
 
 impl Relayers {
-    pub fn new(starknet: &Client, messages: Messages<Message>, configuration: &RelayersConfiguration) -> Self {
+    pub fn new(starknet: &Client, configuration: &RelayersConfiguration) -> Self {
         let mut relayers = HashMap::new();
         let num_relayers = configuration.addresses.len().try_into().unwrap();
         let balances = ExpirableCache::new(num_relayers);
@@ -26,7 +25,6 @@ impl Relayers {
                 *address,
                 Relayer::new(
                     starknet,
-                    messages.clone(),
                     balances.clone(),
                     &RelayerConfiguration {
                         account: StarknetAccountConfiguration {

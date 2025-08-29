@@ -112,6 +112,12 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
 mod tests {
     use std::vec;
 
+    use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, BuildTransactionResponse, InvokeParameters, TransactionParameters};
+    use crate::endpoint::common::{ExecutionParameters, FeeMode, TipPriority};
+    use crate::endpoint::execute::{execute_endpoint, ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteRequest};
+    use crate::endpoint::RequestContext;
+    use crate::testing::TestEnvironment;
+    use crate::{Error, InvokeTransaction};
     use async_trait::async_trait;
     use paymaster_prices::mock::MockPriceOracle;
     use paymaster_prices::TokenPrice;
@@ -119,13 +125,6 @@ mod tests {
     use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
     use starknet::core::types::Felt;
     use starknet::signers::SigningKey;
-
-    use crate::endpoint::build::{build_transaction_endpoint, BuildTransactionRequest, BuildTransactionResponse, InvokeParameters, TransactionParameters};
-    use crate::endpoint::common::{ExecutionParameters, FeeMode};
-    use crate::endpoint::execute::{execute_endpoint, ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteRequest};
-    use crate::endpoint::RequestContext;
-    use crate::testing::TestEnvironment;
-    use crate::{Error, InvokeTransaction};
 
     #[derive(Debug, Clone)]
     struct NoPriceOracle;
@@ -168,6 +167,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -194,6 +194,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -223,6 +224,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -252,6 +254,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },

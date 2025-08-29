@@ -22,6 +22,9 @@ pub struct Client {
     // Cache block price for 10 seconds
     cache_block_price: SyncValue<BlockGasPrice>,
 
+    // Cache median tip for 10 seconds
+    cache_median_tip: SyncValue<u64>,
+
     // Cache account version for 5 minutes
     cache_account_version: ExpirableCache<Felt, PaymasterVersion>,
 
@@ -47,6 +50,7 @@ impl Client {
             inner: paymaster_starknet::Client::new(configuration),
 
             cache_block_price: SyncValue::new(Duration::from_secs(10)),
+            cache_median_tip: SyncValue::new(Duration::from_secs(10)),
             cache_account_version: ExpirableCache::new(1024),
             cache_class_version: Cache::new(128),
             cache_overhead: Cache::new(1024),
@@ -116,5 +120,17 @@ impl Client {
             .await?;
 
         Ok(price)
+    }
+
+    /// Fetch the median tip of the latest block. This function relies on a cache that expires every 10s so
+    /// during that time frame calling it won't induce external calls
+    pub async fn fetch_median_tip(&self) -> Result<u64, Error> {
+        let client = self.inner.clone();
+        let tip = self
+            .cache_median_tip
+            .read_or_refresh(|| Box::pin(async move { client.fetch_block_median_tip().await }))
+            .await?;
+
+        Ok(tip)
     }
 }

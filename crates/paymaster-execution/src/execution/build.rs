@@ -156,48 +156,52 @@ impl Transaction {
         Ok(match &self.transaction {
             // A sponsored transaction only has a deployment without any invoke to pay gas token
             TransactionParameters::Deploy { deployment } if self.parameters.fee_mode().is_sponsored() => {
-                let deploy_tx = deployment.build_transaction(client).await?;
+                let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
 
                 vec![deploy_tx]
             },
             // A non-sponsored deploy transaction also contains a gas token transfer to pay for the gas
             TransactionParameters::Deploy { deployment } => {
-                let deploy_tx = deployment.build_transaction(client).await?;
-                let invoke_tx = self.build_invoke(deployment.address, felt!("0x0"));
+                let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
+                let tip = client.get_tip(self.parameters.tip()).await?;
+                let invoke_tx = self.build_invoke(deployment.address, felt!("0x0"), tip);
 
                 vec![deploy_tx, invoke_tx]
             },
             TransactionParameters::Invoke { invoke } => {
                 let nonce = client.starknet.fetch_nonce(invoke.user_address).await?;
-                let invoke_tx = self.build_invoke(invoke.user_address, nonce);
+                let tip = client.get_tip(self.parameters.tip()).await?;
+                let invoke_tx = self.build_invoke(invoke.user_address, nonce, tip);
 
                 vec![invoke_tx]
             },
             TransactionParameters::DeployAndInvoke { deployment, invoke } if deployment.address == invoke.user_address => {
-                let deploy_tx = deployment.build_transaction(client).await?;
-                let invoke_tx = self.build_invoke(deployment.address, felt!("0x0"));
+                let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
+                let tip = client.get_tip(self.parameters.tip()).await?;
+                let invoke_tx = self.build_invoke(deployment.address, felt!("0x0"), tip);
 
                 vec![deploy_tx, invoke_tx]
             },
             TransactionParameters::DeployAndInvoke { deployment, invoke } => {
-                let deploy_tx = deployment.build_transaction(client).await?;
+                let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
 
                 let nonce = client.starknet.fetch_nonce(invoke.user_address).await?;
-                let invoke_tx = self.build_invoke(invoke.user_address, nonce);
+                let tip = client.get_tip(self.parameters.tip()).await?;
+                let invoke_tx = self.build_invoke(invoke.user_address, nonce, tip);
 
                 vec![deploy_tx, invoke_tx]
             },
         })
     }
 
-    fn build_invoke(&self, sender: Felt, nonce: Felt) -> BroadcastedTransaction {
+    fn build_invoke(&self, sender: Felt, nonce: Felt, tip: u64) -> BroadcastedTransaction {
         let calls = if self.parameters.fee_mode().is_sponsored() {
             self.build_sponsored_calls()
         } else {
             self.build_unsponsored_calls()
         };
 
-        calls.as_transaction(sender, nonce)
+        calls.as_transaction(sender, nonce, tip)
     }
 
     // Build the call for a sponsored transaction which means that we don't include the gas token transfer
@@ -319,7 +323,7 @@ mod tests {
 
     use crate::execution::build::{InvokeParameters, Transaction, TransactionParameters};
     use crate::execution::deploy::DeploymentParameters;
-    use crate::execution::{ExecutionParameters, FeeMode};
+    use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::an_eth_transfer;
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
 
@@ -339,6 +343,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -360,7 +365,7 @@ mod tests {
 
         assert_eq!(calls[1].to, StarknetTestEnvironment::ETH);
         assert_eq!(calls[1].selector, selector!("transfer"));
-        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0xeddfec6c24000"), Felt::ZERO]);
+        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0xe38f9fc02c000"), Felt::ZERO]);
     }
 
     #[tokio::test]
@@ -392,6 +397,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -410,7 +416,7 @@ mod tests {
 
         assert_eq!(calls[0].to, StarknetTestEnvironment::ETH);
         assert_eq!(calls[0].selector, selector!("transfer"));
-        assert_eq!(calls[0].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x175192f01f4000"), Felt::ZERO]);
+        assert_eq!(calls[0].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x180fe9bc2e4000"), Felt::ZERO]);
     }
 
     #[tokio::test]
@@ -440,7 +446,7 @@ mod tests {
                 },
             },
             parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Sponsored,
+                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
                 time_bounds: None,
             },
         };
@@ -490,6 +496,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -512,7 +519,7 @@ mod tests {
 
         assert_eq!(calls[1].to, StarknetTestEnvironment::ETH);
         assert_eq!(calls[1].selector, selector!("transfer"));
-        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b2d11233bc000"), Felt::ZERO]);
+        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b6253b33b4000"), Felt::ZERO]);
     }
 
     #[tokio::test]
@@ -549,6 +556,7 @@ mod tests {
             parameters: ExecutionParameters::V1 {
                 fee_mode: FeeMode::Default {
                     gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
                 },
                 time_bounds: None,
             },
@@ -571,6 +579,6 @@ mod tests {
 
         assert_eq!(calls[1].to, StarknetTestEnvironment::ETH);
         assert_eq!(calls[1].selector, selector!("transfer"));
-        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b2d11233bc000"), Felt::ZERO]);
+        assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b6253b33b4000"), Felt::ZERO]);
     }
 }
