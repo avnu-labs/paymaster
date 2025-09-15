@@ -22,7 +22,7 @@ license = "GPL-3"
 [workspace.dependencies]
 paste = "1.0.15"
 futures-core = "0.3.31"
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 bigdecimal = "0.4.7"
 chrono = "0.4.41"
 deadpool-redis = "0.20.0"
