@@ -2378,7 +2378,6 @@ dependencies = [
  "rand 0.9.1",
  "serde_json",
  "thiserror 2.0.12",
- "tracing",
 ]
 
 [[package]]
@@ -2393,6 +2392,7 @@ dependencies = [
  "opentelemetry 0.30.0",
  "percent-encoding",
  "rand 0.9.1",
+ "serde_json",
  "thiserror 2.0.12",
 ]
 
@@ -2534,7 +2534,7 @@ dependencies = [
  "moka",
  "opentelemetry 0.29.1",
  "opentelemetry-otlp",
- "opentelemetry_sdk 0.29.0",
+ "opentelemetry_sdk 0.30.0",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -2650,7 +2650,7 @@ dependencies = [
  "log",
  "opentelemetry 0.29.1",
  "opentelemetry-otlp",
- "opentelemetry_sdk 0.29.0",
+ "opentelemetry_sdk 0.30.0",
  "paymaster-common",
  "paymaster-prices",
  "paymaster-relayer",
