@@ -60,7 +60,6 @@ impl Transaction {
     /// to the fee that should be used to guarantee a valid execution.
     pub async fn estimate(self, client: &Client) -> Result<EstimatedTransaction, Error> {
         self.check_parameters_valid()?;
-        self.check_balance_valid(client).await?;
 
         let transactions = self.build_transactions(client).await?;
         let token = client.price.fetch_token(self.parameters.gas_token()).await?;
@@ -112,24 +111,6 @@ impl Transaction {
             TransactionParameters::DeployAndInvoke { invoke, .. } if invoke.calls.is_empty() => Err(Error::NoCalls),
             TransactionParameters::DeployAndInvoke { .. } => Ok(()),
         }
-    }
-
-    // Check that the user has at least 1 unit of gas token to avoid the contract throwing an overflow exception
-    async fn check_balance_valid(&self, client: &Client) -> Result<(), Error> {
-        if self.parameters.fee_mode().is_sponsored() {
-            return Ok(());
-        }
-
-        let balance = client
-            .starknet
-            .fetch_balance(self.parameters.gas_token(), self.transaction.user_address())
-            .await?;
-
-        if balance == Felt::ZERO {
-            return Err(Error::Execution(format!("balance for gas token 0x{:x} is zero", self.parameters.gas_token())));
-        }
-
-        Ok(())
     }
 
     // Compute the max fee estimate that we will suggest to use to guarantee execution. This amount will be approved by the user but should be understood
