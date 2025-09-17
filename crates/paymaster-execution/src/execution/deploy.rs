@@ -6,12 +6,13 @@ use starknet::accounts::Account;
 use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::{BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, ResourceBounds, ResourceBoundsMapping};
 use starknet::macros::selector;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::{Client, Error, TipPriority};
 
 /// Deployment parameters required to deploy a contract
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 pub struct DeploymentParameters {
     #[serde_as(as = "UfeHex")]
     pub address: Felt,
@@ -114,5 +115,11 @@ impl DeploymentParameters {
             selector: selector!("deploy_braavos_account"),
             calldata: CalldataBuilder::new().encode(&self.salt).encode(&sigdata).build(),
         }
+    }
+
+    pub fn get_unique_identifier(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
     }
 }

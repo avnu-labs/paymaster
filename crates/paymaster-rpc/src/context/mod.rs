@@ -1,6 +1,7 @@
 mod configuration;
 pub use configuration::{Configuration, RPCConfiguration};
 use paymaster_execution::Client as ExecutionClient;
+use paymaster_execution::TransactionDuplicateFilter;
 use paymaster_prices::Client as PriceClient;
 use paymaster_sponsoring::Client as SponsoringClient;
 
@@ -12,6 +13,7 @@ pub struct Context {
     pub sponsoring: SponsoringClient,
 
     pub execution: ExecutionClient,
+    pub transaction_filter: TransactionDuplicateFilter,
 }
 
 impl Context {
@@ -21,6 +23,7 @@ impl Context {
             sponsoring: SponsoringClient::new(&configuration.sponsoring),
 
             execution: ExecutionClient::new(&configuration.clone().into()),
+            transaction_filter: TransactionDuplicateFilter::default(),
 
             configuration,
         }

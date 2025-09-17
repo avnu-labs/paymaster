@@ -19,6 +19,9 @@ use paymaster_starknet::transaction::{Calls, EstimatedCalls};
 use paymaster_starknet::{Configuration as StarknetConfiguration, ContractAddress, StarknetAccount, StarknetAccountConfiguration};
 use serde::Deserialize;
 use thiserror::Error;
+mod filter;
+
+pub use filter::TransactionDuplicateFilter;
 
 use crate::starknet::Client as Starknet;
 

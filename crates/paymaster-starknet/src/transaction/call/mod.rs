@@ -19,7 +19,7 @@ mod transfer;
 pub use transfer::{StrkTransfer, TokenTransfer};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 pub struct Calls(Vec<Call>);
 
 impl Deref for Calls {

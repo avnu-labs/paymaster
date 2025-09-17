@@ -91,6 +91,8 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
         transaction: request.transaction.try_into()?,
     };
 
+    ctx.transaction_filter.filter(&transaction.transaction)?;
+
     let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
         let authenticated_api_key = ctx.validate_api_key().await?;
         transaction

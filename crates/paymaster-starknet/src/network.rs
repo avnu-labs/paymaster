@@ -7,7 +7,7 @@ use starknet::core::types::Felt;
 use crate::Error;
 
 /// Represent the chain id which is either Sepolia or Mainnet
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChainID {
     Sepolia,

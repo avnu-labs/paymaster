@@ -3,12 +3,13 @@ use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, Ex
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::execution::deploy::DeploymentParameters;
 use crate::execution::ExecutionParameters;
 use crate::{Client, Error};
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum ExecutableTransactionParameters {
     Deploy {
         deployment: DeploymentParameters,
@@ -22,7 +23,17 @@ pub enum ExecutableTransactionParameters {
     },
 }
 
-#[derive(Debug)]
+impl ExecutableTransactionParameters {
+    pub fn get_unique_identifier(&self) -> u64 {
+        match self {
+            ExecutableTransactionParameters::Deploy { deployment } => deployment.get_unique_identifier(),
+            ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
+            ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
+        }
+    }
+}
+
+#[derive(Debug, Hash)]
 pub struct ExecutableInvokeParameters {
     user: Felt,
     signature: Signature,
@@ -56,6 +67,13 @@ impl ExecutableInvokeParameters {
             *transfer_recipient,
             *last_call.calldata.get(1).ok_or(Error::InvalidTypedData)?,
         ))
+    }
+
+    pub fn get_unique_identifier(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.user.hash(&mut hasher);
+        self.message.nonce().hash(&mut hasher);
+        hasher.finish()
     }
 }
 

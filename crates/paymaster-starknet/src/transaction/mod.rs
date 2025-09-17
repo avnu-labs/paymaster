@@ -22,7 +22,7 @@ pub use version::{PaymasterVersion, SupportedVersion};
 
 use crate::{ChainID, Error, Signature};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ExecuteFromOutsideParameters {
     pub chain_id: ChainID,
     pub caller: Felt,
@@ -79,7 +79,7 @@ impl From<CallsV2> for Calls {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum ExecuteFromOutsideMessage {
     V1(ExecuteFromOutsideMessageV1),
     V2(ExecuteFromOutsideMessageV2),
@@ -120,9 +120,16 @@ impl ExecuteFromOutsideMessage {
             Self::V2(message) => message.to_call(user_address, signature),
         }
     }
+
+    pub fn nonce(&self) -> &Felt {
+        match self {
+            Self::V1(message) => &message.nonce,
+            Self::V2(message) => &message.nonce,
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ExecuteFromOutsideMessageV1(ExecuteFromOutsideParameters);
 
 impl Deref for ExecuteFromOutsideMessageV1 {
@@ -252,7 +259,7 @@ impl ExecuteFromOutsideMessageV1 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ExecuteFromOutsideMessageV2(ExecuteFromOutsideParameters);
 
 impl Deref for ExecuteFromOutsideMessageV2 {

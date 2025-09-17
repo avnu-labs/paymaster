@@ -6,7 +6,7 @@ use starknet::core::types::Felt;
 
 use crate::transaction::{AsCalldata, CalldataBuilder};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 pub struct TimeBounds {
     pub execute_after: u64,
     pub execute_before: u64,
