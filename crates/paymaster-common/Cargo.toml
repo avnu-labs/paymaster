@@ -19,7 +19,7 @@ tracing = { workspace = true, features = ['attributes'] }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true }
-serde = { version = "1.0.218", features = ["derive"] }
+serde = { version = "1.0.226", features = ["derive"] }
 base64 = { workspace = true }
 tracing-opentelemetry = { version = "0.30.0", features = ["metrics_gauge_unstable"] }
 tracing-subscriber = { workspace = true }
