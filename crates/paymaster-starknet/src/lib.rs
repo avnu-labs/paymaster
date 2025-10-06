@@ -205,13 +205,16 @@ impl Client {
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "fetch_block_gas_price");
 
         let prices = match result? {
-            MaybePreConfirmedBlockWithTxs::Block(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
-            MaybePreConfirmedBlockWithTxs::PreConfirmedBlock(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri),
+            MaybePreConfirmedBlockWithTxs::Block(block) => (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri, block.l2_gas_price.price_in_fri),
+            MaybePreConfirmedBlockWithTxs::PreConfirmedBlock(block) => {
+                (block.l1_gas_price.price_in_fri, block.l1_data_gas_price.price_in_fri, block.l2_gas_price.price_in_fri)
+            },
         };
 
         Ok(BlockGasPrice {
-            computation: prices.0,
-            storage: prices.1,
+            l1_gas_price: prices.0,
+            l1_data_gas_price: prices.1,
+            l2_gas_price: prices.2,
         })
     }
 

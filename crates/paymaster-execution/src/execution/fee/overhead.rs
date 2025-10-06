@@ -11,15 +11,16 @@ use crate::Error;
 /// added on top of the original estimate.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ValidationGasOverhead {
-    pub computation: Felt,
-    pub storage: Felt,
+    pub l1_gas: Felt,
+    pub l1_data_gas: Felt,
+    pub l2_gas: Felt,
 }
 
 impl Mul<ValidationGasOverhead> for BlockGasPrice {
     type Output = Felt;
 
     fn mul(self, rhs: ValidationGasOverhead) -> Self::Output {
-        self.storage * rhs.storage + self.computation * rhs.computation
+        self.l1_gas_price * rhs.l1_gas + self.l1_data_gas_price * rhs.l1_data_gas + self.l2_gas_price * rhs.l2_gas
     }
 }
 
@@ -32,8 +33,9 @@ impl ValidationGasOverhead {
     /// Additional cost induced by Braavos account
     fn braavos() -> Self {
         Self {
-            computation: felt!("0x0460"),
-            storage: Felt::ZERO,
+            l1_gas: Felt::ZERO,
+            l1_data_gas: Felt::ZERO,
+            l2_gas: felt!("0x02c7ab80"),
         }
     }
 
