@@ -96,9 +96,16 @@ impl ExecutableTransaction {
     /// Estimate a sponsored transaction which is a transaction that will be paid by the relayer
     pub async fn estimate_sponsored_transaction(self, client: &Client, sponsor_metadata: Vec<Felt>) -> Result<EstimatedExecutableTransaction, Error> {
         let calls = self.build_sponsored_calls(sponsor_metadata);
-        let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
 
-        Ok(EstimatedExecutableTransaction(estimated_calls))
+        let estimated_calls = client.estimate(&calls, self.parameters.tip()).await?;
+        let fee_estimate = estimated_calls.estimate();
+
+        // We recompute the real estimate fee. Validation step is not included in the fee estimate
+        let paid_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
+        let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
+
+        let estimated_final_calls = calls.with_estimate(final_fee_estimate);
+        Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
     /// Estimate an unsponsored transaction which is a transaction that will be paid by the user
