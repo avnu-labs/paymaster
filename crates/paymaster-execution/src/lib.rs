@@ -5,12 +5,16 @@ use std::collections::HashSet;
 
 pub use execution::*;
 
+pub mod diagnostics;
+pub mod tokens;
+
 #[cfg(feature = "testing")]
 pub mod testing;
 
 mod error;
 mod starknet;
 use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
+use diagnostics::DiagnosticService;
 pub use error::Error;
 use paymaster_common::{measure_duration, metric};
 use paymaster_prices::{Client as PriceClient, Configuration as PriceConfiguration};
@@ -78,6 +82,8 @@ pub struct Client {
 
     estimate_account: StarknetAccount,
     relayers: RelayerManager,
+
+    pub diagnostic_service: DiagnosticService,
 }
 
 impl Client {
@@ -92,6 +98,8 @@ impl Client {
 
             estimate_account: Starknet::new(&configuration.starknet).initialize_account(&configuration.estimate_account),
             relayers: RelayerManager::new(&configuration.clone().into()),
+
+            diagnostic_service: DiagnosticService::new(configuration.starknet.chain_id.as_felt()),
         }
     }
 
