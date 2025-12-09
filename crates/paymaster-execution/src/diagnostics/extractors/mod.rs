@@ -31,4 +31,24 @@
 
 mod avnu;
 
-pub use avnu::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS};
+use crate::diagnostics::DiagnosticValue;
+pub use avnu::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
+use std::collections::HashMap;
+
+pub struct Metadata(pub HashMap<String, DiagnosticValue>);
+
+impl Metadata {
+    pub fn new() -> Self {
+        Metadata(HashMap::new())
+    }
+    pub fn insert(&mut self, key: impl Into<String>, value: impl Into<DiagnosticValue>) -> &mut Self {
+        self.0.insert(key.into(), value.into());
+        self
+    }
+    fn get_string_value(&self, key: &str) -> Option<String> {
+        match self.0.get(key) {
+            Some(DiagnosticValue::String(s)) => Some(s.clone()),
+            _ => None,
+        }
+    }
+}

@@ -1,5 +1,9 @@
 use starknet::core::types::Felt;
 
+pub fn felt_to_u128(felt: Felt) -> u128 {
+    felt.to_biguint().try_into().unwrap_or(0)
+}
+
 pub fn parse_units(amount: f64, decimals: u32) -> Felt {
     Felt::from(amount as u128 * 10_u128.pow(decimals))
 }

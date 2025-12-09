@@ -11,7 +11,7 @@
 //!
 //! - [`DiagnosticContext`]: Contains the transaction calls and error information
 //! - [`CallMetadataExtractor`]: Trait for implementing contract-specific extractors
-//! - [`DiagnosticService`]: Registry that manages extractors and orchestrates analysis
+//! - [`DiagnosticClient`]: Registry that manages extractors and orchestrates analysis
 //! - [`CallDiagnostic`]: The output containing extracted metadata for logging
 //!
 //! # Usage
@@ -31,12 +31,12 @@
 //! }
 //! ```
 
+mod client;
 mod context;
 mod extractor;
-mod service;
 
 pub mod extractors;
 
+pub use client::DiagnosticClient;
 pub use context::DiagnosticContext;
-pub use extractor::{CallDiagnostic, CallMetadataExtractor, DiagnosticMetric, DiagnosticValue, ErrorCategory};
-pub use service::DiagnosticService;
+pub use extractor::{CallDiagnostic, CallMetadataExtractor, DiagnosticMetric, DiagnosticValue};

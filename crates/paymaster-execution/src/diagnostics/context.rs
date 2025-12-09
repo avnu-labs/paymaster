@@ -7,23 +7,23 @@ use starknet::core::types::{Call, Felt};
 /// Contains the original calls that were attempted, the error that occurred,
 /// and relevant transaction metadata.
 #[derive(Debug)]
-pub struct DiagnosticContext<'a> {
+pub struct DiagnosticContext {
     /// The calls that were part of the failed transaction
-    pub calls: &'a [Call],
+    pub calls: Vec<Call>,
 
     /// The error message from the simulation/execution failure
-    pub error_message: &'a str,
+    pub error_message: String,
 
     /// The user's account address
     pub user_address: Felt,
 }
 
-impl<'a> DiagnosticContext<'a> {
+impl DiagnosticContext {
     /// Creates a new diagnostic context.
-    pub fn new(calls: &'a [Call], error_message: &'a str, user_address: Felt) -> Self {
+    pub fn new(calls: &[Call], error_message: &str, user_address: Felt) -> Self {
         Self {
-            calls,
-            error_message,
+            calls: calls.to_vec(),
+            error_message: error_message.to_string(),
             user_address,
         }
     }
