@@ -6,11 +6,13 @@
 use crate::diagnostics::extractors::Metadata;
 use crate::diagnostics::{CallDiagnostic, CallMetadataExtractor, DiagnosticContext, DiagnosticMetric, DiagnosticValue};
 use crate::tokens::TokenClient;
+use crate::Error;
 use async_trait::async_trait;
 use paymaster_starknet::math::felt_to_u128;
 use serde::Serialize;
 use starknet::core::types::{Call, Felt};
 use starknet::macros::selector;
+use tracing::warn;
 
 /// AVNU Exchange contract address on Starknet mainnet.
 pub const AVNU_EXCHANGE_ADDRESS_MAINNET: Felt = Felt::from_hex_unchecked("0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f");
@@ -197,12 +199,12 @@ impl AvnuExtractor {
     /// 9: integrator_fee_amount_bps
     /// 10: integrator_fee_recipient
     /// 11+: routes (Array<Route>)
-    async fn extract_multi_route_swap_params(&self, call: &Call) -> Metadata {
+    async fn extract_multi_route_swap_params(&self, call: &Call) -> Result<Metadata, Error> {
         let mut metadata = Metadata::new();
         let calldata = &call.calldata;
 
         if calldata.len() < 11 {
-            return metadata;
+            return Ok(metadata);
         }
 
         let sell_token = calldata[0];
@@ -217,7 +219,7 @@ impl AvnuExtractor {
         metadata.insert("buy_amount_hex", format!("0x{:x}", buy_amount_raw));
         metadata.insert("buy_min_amount_hex", format!("0x{:x}", buy_min_amount_raw));
         metadata.insert("beneficiary", calldata[8]);
-        metadata.insert("integrator_fee_bps", felt_to_u128(calldata[9]));
+        metadata.insert("integrator_fee_bps", felt_to_u128(calldata[9])?);
         metadata.insert("integrator_fee_recipient", calldata[10]);
 
         self.insert_token_info("sell_token", &mut metadata, sell_token).await;
@@ -230,11 +232,11 @@ impl AvnuExtractor {
             .await;
 
         // Calculate slippage percentage: ((buy_amount - buy_min_amount) / buy_amount) * 100
-        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(buy_amount_raw), felt_to_u128(buy_min_amount_raw)) {
+        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(buy_amount_raw)?, felt_to_u128(buy_min_amount_raw)?) {
             metadata.insert("max_slippage_percent", slippage_pct);
         }
 
-        metadata
+        Ok(metadata)
     }
 
     /// Extracts parameters from a swap_exact_token_to call.
@@ -249,12 +251,12 @@ impl AvnuExtractor {
     /// 9: integrator_fee_amount_bps
     /// 10: integrator_fee_recipient
     /// 11+: routes
-    async fn extract_swap_exact_token_to_params(&self, call: &Call) -> Metadata {
+    async fn extract_swap_exact_token_to_params(&self, call: &Call) -> Result<Metadata, Error> {
         let mut metadata = Metadata::new();
         let calldata = &call.calldata;
 
         if calldata.len() < 11 {
-            return metadata;
+            return Ok(metadata);
         }
 
         let sell_token = calldata[0];
@@ -269,7 +271,7 @@ impl AvnuExtractor {
         metadata.insert("sell_max_amount_hex", format!("0x{:x}", sell_max_amount_raw));
         metadata.insert("buy_amount_hex", format!("0x{:x}", buy_amount_raw));
         metadata.insert("beneficiary", calldata[8]);
-        metadata.insert("integrator_fee_bps", felt_to_u128(calldata[9]));
+        metadata.insert("integrator_fee_bps", felt_to_u128(calldata[9])?);
         metadata.insert("integrator_fee_recipient", calldata[10]);
 
         self.insert_token_info("sell_token", &mut metadata, sell_token).await;
@@ -282,11 +284,11 @@ impl AvnuExtractor {
             .await;
 
         // Calculate slippage percentage: ((sell_max_amount - sell_amount) / sell_max_amount) * 100
-        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(sell_max_amount_raw), felt_to_u128(sell_amount_raw)) {
+        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(sell_max_amount_raw)?, felt_to_u128(sell_amount_raw)?) {
             metadata.insert("max_slippage_percent", slippage_pct);
         }
 
-        metadata
+        Ok(metadata)
     }
 
     /// Extracts parameters from a swap_external_solver call.
@@ -321,11 +323,11 @@ impl AvnuExtractor {
     }
 
     /// Extracts swap parameters based on the function selector.
-    async fn extract_swap_params(&self, call: &Call) -> Metadata {
+    async fn extract_swap_params(&self, call: &Call) -> Result<Metadata, Error> {
         let mut metadata = if call.selector == MULTI_ROUTE_SWAP_SELECTOR {
-            self.extract_multi_route_swap_params(call).await
+            self.extract_multi_route_swap_params(call).await?
         } else if call.selector == SWAP_EXACT_TOKEN_TO_SELECTOR {
-            self.extract_swap_exact_token_to_params(call).await
+            self.extract_swap_exact_token_to_params(call).await?
         } else if call.selector == SWAP_EXTERNAL_SOLVER_SELECTOR {
             self.extract_swap_external_solver_params(call)
         } else {
@@ -344,7 +346,7 @@ impl AvnuExtractor {
         };
 
         metadata.insert("function", function_name);
-        metadata
+        Ok(metadata)
     }
 
     /// Builds AVNU-specific metrics from extracted metadata.
@@ -401,7 +403,13 @@ impl CallMetadataExtractor for AvnuExtractor {
 
         // Try to find and extract swap call parameters
         let mut metadata = match self.find_swap_call(context) {
-            Some(call) => self.extract_swap_params(call).await,
+            Some(call) => match self.extract_swap_params(call).await {
+                Ok(m) => m,
+                Err(error) => {
+                    warn!("Failed to extract avnu swap params. {:?}", error);
+                    return None;
+                },
+            },
             None => Metadata::new(),
         };
 
@@ -437,7 +445,7 @@ mod tests {
     fn multi_route_swap_call() -> Call {
         Call {
             to: AVNU_EXCHANGE_ADDRESS_MAINNET,
-            selector: multi_route_swap(),
+            selector: MULTI_ROUTE_SWAP_SELECTOR,
             calldata: vec![
                 Token::eth(&ChainID::Mainnet).address,
                 Felt::from(1000000u64),
@@ -457,7 +465,7 @@ mod tests {
     fn swap_exact_token_to_call() -> Call {
         Call {
             to: AVNU_EXCHANGE_ADDRESS_MAINNET,
-            selector: swap_exact_token_to(),
+            selector: SWAP_EXACT_TOKEN_TO_SELECTOR,
             calldata: vec![
                 Token::eth(&ChainID::Mainnet).address,
                 Felt::from(1000000u64),
@@ -506,7 +514,7 @@ mod tests {
             let extractor = extractor();
             let other_call = Call {
                 to: Felt::from(0x999u64),
-                selector: multi_route_swap(),
+                selector: MULTI_ROUTE_SWAP_SELECTOR,
                 calldata: vec![],
             };
             let context = DiagnosticContext::new(&vec![other_call], "error", Felt::ZERO);
@@ -554,7 +562,7 @@ mod tests {
             let extractor = extractor();
             let short_call = Call {
                 to: AVNU_EXCHANGE_ADDRESS_MAINNET,
-                selector: multi_route_swap(),
+                selector: MULTI_ROUTE_SWAP_SELECTOR,
                 calldata: vec![Felt::ONE, Felt::TWO],
             };
             let context = DiagnosticContext::new(&vec![short_call], "error", Felt::ZERO);
