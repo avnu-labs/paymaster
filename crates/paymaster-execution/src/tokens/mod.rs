@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use paymaster_common::concurrency::SyncValue;
-use paymaster_starknet::math::format_units;
+use paymaster_starknet::math::denormalize_felt;
 use paymaster_starknet::ChainID;
 use serde::Deserialize;
 use starknet::core::types::Felt;
@@ -80,11 +80,9 @@ impl TokenClient {
 
     /// Creates a new token service based on chain ID.
     pub fn new(chain_id: ChainID) -> Self {
-        if chain_id.as_felt() == ChainID::Sepolia.as_felt() {
-            Self::sepolia()
-        } else {
-            // Default to mainnet for unknown chain IDs
-            Self::mainnet()
+        match chain_id {
+            ChainID::Sepolia => Self::sepolia(),
+            ChainID::Mainnet => Self::mainnet(),
         }
     }
 
@@ -164,7 +162,7 @@ impl TokenClient {
     /// - 100000000000000000 (1e17) becomes 0.1
     pub async fn try_normalize_amount(&self, address: Felt, raw_amount: Felt) -> Option<f64> {
         let token = self.get_token(address).await?;
-        Some(format_units(raw_amount, token.decimals as u32))
+        Some(denormalize_felt(raw_amount, token.decimals as u32))
     }
 }
 

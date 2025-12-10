@@ -2,7 +2,7 @@
 
 use super::context::DiagnosticContext;
 use super::extractor::{CallDiagnostic, CallMetadataExtractor};
-use super::extractors::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
+use super::extractors::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS_MAINNET, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
 use crate::tokens::TokenClient;
 use opentelemetry::{global, KeyValue};
 use paymaster_common::metric;
@@ -29,7 +29,7 @@ impl DiagnosticClient {
         let token_client = TokenClient::new(chain_id);
         let avnu_contract_address = match chain_id {
             ChainID::Sepolia => AVNU_EXCHANGE_ADDRESS_SEPOLIA,
-            ChainID::Mainnet => AVNU_EXCHANGE_ADDRESS,
+            ChainID::Mainnet => AVNU_EXCHANGE_ADDRESS_MAINNET,
         };
         Self {
             extractors: vec![Arc::new(AvnuExtractor::new(avnu_contract_address, token_client))],
@@ -110,12 +110,12 @@ impl DiagnosticClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostics::extractors::AVNU_EXCHANGE_ADDRESS;
+    use crate::diagnostics::extractors::AVNU_EXCHANGE_ADDRESS_MAINNET;
     use starknet::core::types::{Call, Felt};
 
     fn avnu_call() -> Call {
         Call {
-            to: AVNU_EXCHANGE_ADDRESS,
+            to: AVNU_EXCHANGE_ADDRESS_MAINNET,
             selector: Felt::from(0x1234u64),
             calldata: vec![],
         }

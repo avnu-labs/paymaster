@@ -32,7 +32,7 @@
 mod avnu;
 
 use crate::diagnostics::DiagnosticValue;
-pub use avnu::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
+pub use avnu::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS_MAINNET, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
 use std::collections::HashMap;
 
 pub struct Metadata(pub HashMap<String, DiagnosticValue>);

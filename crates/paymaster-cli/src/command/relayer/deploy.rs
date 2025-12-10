@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use clap::Args;
 use paymaster_service::core::context::configuration::Configuration as ServiceConfiguration;
 use paymaster_starknet::constants::Token;
-use paymaster_starknet::math::{format_units, parse_units};
+use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::Calls;
 use paymaster_starknet::{Client, Configuration, StarknetAccountConfiguration};
 use starknet::accounts::ConnectedAccount;
@@ -49,14 +49,14 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
     let chain_id = configuration.starknet.chain_id;
     let rpc_url = configuration.starknet.endpoint.clone();
 
-    let fund_gas_tank_in_fri = parse_units(params.fund, 18);
+    let fund_gas_tank_in_fri = normalize_felt(params.fund, 18);
     let num_relayers = params.num_relayers;
 
     // Print the parameters to the user
     info!("Using chain-id: {}", chain_id.as_identifier());
     info!("Using RPC URL: {}", rpc_url);
     info!("Nbr of new relayers: {}", num_relayers);
-    info!("Fund gas tank with: {} STRK", format_units(fund_gas_tank_in_fri, 18));
+    info!("Fund gas tank with: {} STRK", denormalize_felt(fund_gas_tank_in_fri, 18));
     info!("Profile path: {}", params.profile);
 
     // Initialize the Starknet client
@@ -77,7 +77,7 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
     if !params.force {
         print!(
             "Do you want to proceed with the deployment? This will transfer {} STRK tokens to your new relayers. (y/N): ",
-            format_units(fund_gas_tank_in_fri, 18)
+            denormalize_felt(fund_gas_tank_in_fri, 18)
         );
         io::stdout().flush().unwrap();
 

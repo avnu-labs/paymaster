@@ -1,4 +1,4 @@
-use paymaster_starknet::math::format_units;
+use paymaster_starknet::math::denormalize_felt;
 
 use crate::command::balance::BalanceResult;
 
@@ -28,7 +28,7 @@ pub fn display_table(results: &Vec<Result<BalanceResult, paymaster_starknet::Err
                 } else {
                     format!("0x{}", addr_str)
                 };
-                println!("| {:<50} | {:<20} |", cropped_addr, format!("{}", format_units(relayer_balance.balance, 18)));
+                println!("| {:<50} | {:<20} |", cropped_addr, format!("{}", denormalize_felt(relayer_balance.balance, 18)));
             },
             Err(e) => {
                 println!("| {:<50} | {:<20} |", "Error", format!("Failed: {}", e));

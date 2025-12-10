@@ -14,7 +14,7 @@ use paymaster_relayer::{Context as RelayerContext, RelayerManagerConfiguration, 
 use paymaster_rpc::RPCConfiguration;
 use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, VerbosityConfiguration};
 use paymaster_starknet::constants::{Endpoint, Token};
-use paymaster_starknet::math::{format_units, parse_units};
+use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
 use paymaster_starknet::{ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration};
 use starknet::accounts::ConnectedAccount;
@@ -117,15 +117,15 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     let chain_id = ChainID::from_string(&params.chain_id).expect("invalid chain-id");
     let default_rpc_url = Endpoint::default_rpc_url(&chain_id);
     let rpc_url = params.rpc_url.unwrap_or_else(|| default_rpc_url.to_string());
-    let gas_tank_fund_in_fri = parse_units(params.fund, 18);
-    let estimate_account_fund_in_fri = parse_units(params.estimate_account_fund, 18);
+    let gas_tank_fund_in_fri = normalize_felt(params.fund, 18);
+    let estimate_account_fund_in_fri = normalize_felt(params.estimate_account_fund, 18);
     let num_relayers = params.num_relayers;
 
     // By default, we support USDC as gas token
     let supported_tokens = HashSet::from([Token::usdc(&chain_id).address]);
 
     // Compute the total funding amount
-    let gas_tank_reserve_in_fri = parse_units(1.0, 18);
+    let gas_tank_reserve_in_fri = normalize_felt(1.0, 18);
     let estimate_account_funding_amount = estimate_account_fund_in_fri;
     let total_funding_amount = estimate_account_funding_amount + gas_tank_reserve_in_fri + gas_tank_fund_in_fri;
 
@@ -133,18 +133,21 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     info!("Using chain-id: {}", chain_id.as_identifier());
     info!("Using RPC URL: {}", rpc_url);
     info!("Nbr of relayers: {}", num_relayers);
-    info!("Minimum relayer balance: {} STRK", format_units(parse_units(params.min_relayer_balance, 18), 18));
+    info!(
+        "Minimum relayer balance: {} STRK",
+        denormalize_felt(normalize_felt(params.min_relayer_balance, 18), 18)
+    );
     info!(
         "Rebalancing trigger balance: {} STRK",
-        format_units(parse_units(params.rebalancing_trigger_balance, 18), 18)
+        denormalize_felt(normalize_felt(params.rebalancing_trigger_balance, 18), 18)
     );
-    info!("Fund estimate account with: {} STRK", format_units(estimate_account_fund_in_fri, 18));
+    info!("Fund estimate account with: {} STRK", denormalize_felt(estimate_account_fund_in_fri, 18));
     info!(
         "Fund gas tank with: {} STRK(reserve) + {} STRK(fund)",
-        format_units(gas_tank_reserve_in_fri, 18),
-        format_units(gas_tank_fund_in_fri, 18)
+        denormalize_felt(gas_tank_reserve_in_fri, 18),
+        denormalize_felt(gas_tank_fund_in_fri, 18)
     );
-    info!("Total amount to fund paymaster: {} STRK", format_units(total_funding_amount, 18));
+    info!("Total amount to fund paymaster: {} STRK", denormalize_felt(total_funding_amount, 18));
     info!("Profile path: {}", params.profile);
 
     // Initialize the Starknet client
@@ -158,8 +161,8 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     // Check that the initial funding is enough for rebalancing to work properly
     assert_rebalancing_configuration(
         num_relayers,
-        parse_units(params.min_relayer_balance, 18),
-        parse_units(params.rebalancing_trigger_balance, 18),
+        normalize_felt(params.min_relayer_balance, 18),
+        normalize_felt(params.rebalancing_trigger_balance, 18),
         gas_tank_fund_in_fri,
     )
     .await?;
@@ -174,7 +177,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     if !skip_user_confirmation {
         print!(
             "Do you want to proceed with the deployment? This will transfer {} STRK tokens to gas tank and estimate account. (y/N): ",
-            format_units(total_funding_amount, 18)
+            denormalize_felt(total_funding_amount, 18)
         );
         io::stdout().flush().unwrap();
 
@@ -245,11 +248,11 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         relayers: RelayersConfiguration {
             private_key: shared_relayers_pk,
             addresses: relayers_deployment.addresses,
-            min_relayer_balance: Felt::from(parse_units(params.min_relayer_balance, 18)),
+            min_relayer_balance: Felt::from(normalize_felt(params.min_relayer_balance, 18)),
             lock: DEFAULT_RELAYERS_LOCK_MODE,
             rebalancing: OptionalRebalancingConfiguration::initialize(Some(RebalancingConfiguration {
                 check_interval: params.rebalancing_check_interval,
-                trigger_balance: Felt::from(parse_units(params.rebalancing_trigger_balance, 18)),
+                trigger_balance: Felt::from(normalize_felt(params.rebalancing_trigger_balance, 18)),
                 swap_config: SwapConfiguration {
                     slippage: params.swap_slippage,
                     swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration {

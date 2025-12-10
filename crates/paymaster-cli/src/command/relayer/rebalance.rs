@@ -7,7 +7,7 @@ use paymaster_common::service::Service;
 use paymaster_relayer::{Context, RelayerManagerConfiguration, RelayerRebalancingService};
 use paymaster_service::core::context::configuration::Configuration as ServiceConfiguration;
 use paymaster_starknet::constants::Token;
-use paymaster_starknet::math::{format_units, parse_units};
+use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
 use paymaster_starknet::{Client, Configuration};
 use starknet::accounts::{Account, ConnectedAccount};
@@ -59,7 +59,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
     });
 
     // How much STRK to refund the gas tank with from the master account
-    let additional_strk_balance = parse_units(params.fund, 18);
+    let additional_strk_balance = normalize_felt(params.fund, 18);
 
     // Assert the balance of master is greater than the amount of STRK needed for the refund
     assert_strk_balance(&starknet, params.master_address, additional_strk_balance)
@@ -106,7 +106,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
         if !params.force {
             print!(
                 "Do you want to proceed with the rebalance? This will transfer an additional {} STRK tokens to the gas tank. (y/N): ",
-                format_units(additional_strk_balance, 18)
+                denormalize_felt(additional_strk_balance, 18)
             );
             stdout().flush().unwrap();
 

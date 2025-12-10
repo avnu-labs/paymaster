@@ -6,7 +6,7 @@ use paymaster_common::concurrency::ConcurrentExecutor;
 use paymaster_common::service::{Error as ServiceError, Service};
 use paymaster_common::task;
 use paymaster_starknet::constants::Token;
-use paymaster_starknet::math::format_units;
+use paymaster_starknet::math::denormalize_felt;
 use paymaster_starknet::transaction::{Calls, TokenTransfer};
 use paymaster_starknet::{Configuration as StarknetConfiguration, StarknetAccount, StarknetAccountConfiguration};
 use serde::{Deserialize, Serialize};
@@ -161,7 +161,7 @@ impl Service for RelayerRebalancingService {
                 Err(e) => {
                     error!("Failed to batch swap tokens to STRK: {}", e);
                     // Continue with empty calls and zero balance instead of crashing
-                    (Calls::new(vec![]), paymaster_starknet::math::parse_units(0.0, 18))
+                    (Calls::new(vec![]), paymaster_starknet::math::normalize_felt(0.0, 18))
                 },
             };
 
@@ -331,7 +331,7 @@ impl RelayerRebalancingService {
         };
 
         // Reserve 1 STRK for gas fees - gas tank must always keep minimum balance for future transactions
-        let gas_reserve = paymaster_starknet::math::parse_units(1.0, 18);
+        let gas_reserve = paymaster_starknet::math::normalize_felt(1.0, 18);
         let total_amount_available = if gas_tank_strk_balance > gas_reserve {
             (gas_tank_strk_balance - gas_reserve) + additional_strk_balance
         } else {
@@ -343,7 +343,7 @@ impl RelayerRebalancingService {
         if min_amount_needed > total_amount_available {
             return Err(ServiceError::new(&format!(
                 "Not enough STRK balance to refill all relayers to the min trigger balance, skipping rebalance. (missing: {} STRK)",
-                format_units(min_amount_needed - total_amount_available, 18)
+                denormalize_felt(min_amount_needed - total_amount_available, 18)
             )));
         }
 
@@ -517,7 +517,7 @@ mod rebalancing_tests {
     use async_trait::async_trait;
     use paymaster_common::service::Service;
     use paymaster_starknet::constants::Token;
-    use paymaster_starknet::math::parse_units;
+    use paymaster_starknet::math::normalize_felt;
     use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
     use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration};
     use starknet::core::types::Felt;
@@ -838,8 +838,8 @@ mod rebalancing_tests {
 
     #[tokio::test]
     async fn test_calculate_optimal_target_balance_3() {
-        let trigger_balance = Felt::from(parse_units(8.0, 18));
-        let available_funds = Felt::from(parse_units(193.88480268654803, 18));
+        let trigger_balance = Felt::from(normalize_felt(8.0, 18));
+        let available_funds = Felt::from(normalize_felt(193.88480268654803, 18));
 
         let configuration = setup_mock_configuration(
             trigger_balance,
@@ -863,19 +863,19 @@ mod rebalancing_tests {
         let relayers = vec![
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_1,
-                balance: Felt::from(parse_units(8.0, 18)), // Above trigger
+                balance: Felt::from(normalize_felt(8.0, 18)), // Above trigger
             },
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_2,
-                balance: Felt::from(parse_units(8.0, 18)), // Above trigger
+                balance: Felt::from(normalize_felt(8.0, 18)), // Above trigger
             },
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_3,
-                balance: Felt::from(parse_units(1.0, 18)), // Below trigger
+                balance: Felt::from(normalize_felt(1.0, 18)), // Below trigger
             },
         ];
 
-        let target_balance_should_be = Felt::from(parse_units(70.29493423, 18));
+        let target_balance_should_be = Felt::from(normalize_felt(70.29493423, 18));
         let target_balance = service.calculate_optimal_target_balance(available_funds, &relayers);
 
         // Target should be >= trigger_balance and distributed homogeneously
@@ -1186,7 +1186,7 @@ mod integration_tests {
     use paymaster_common::service::Service;
     use paymaster_execution::testing::TestEnvironment;
     use paymaster_starknet::constants::Token;
-    use paymaster_starknet::math::format_units;
+    use paymaster_starknet::math::denormalize_felt;
     use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
     use paymaster_starknet::transaction::TokenTransfer;
     use starknet::accounts::{Account, ConnectedAccount};
@@ -1293,7 +1293,7 @@ mod integration_tests {
 
         // 2. Fund the gas tank with STRK for rebalancing
         let gas_tank_funding_amount = Felt::from(10000000000000000000u128); // 10 STRK
-        println!("💰 Funding gas tank with {} STRK...", format_units(gas_tank_funding_amount, 18));
+        println!("💰 Funding gas tank with {} STRK...", denormalize_felt(gas_tank_funding_amount, 18));
 
         // Transfer STRK from ACCOUNT_1 to gas tank
         let funding_account = test_env.starknet.initialize_account(&StarknetTestEnvironment::ACCOUNT_1);
@@ -1311,7 +1311,7 @@ mod integration_tests {
             .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, gas_tank_account.address())
             .await
             .unwrap();
-        println!("✅ Gas tank balance: {} STRK", format_units(gas_tank_balance_after_funding, 18));
+        println!("✅ Gas tank balance: {} STRK", denormalize_felt(gas_tank_balance_after_funding, 18));
         assert!(gas_tank_balance_after_funding >= gas_tank_funding_amount);
 
         // 3. Simulate low balances for relayers using cache
@@ -1375,8 +1375,8 @@ mod integration_tests {
                 .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, *relayer_address)
                 .await
                 .unwrap();
-            println!("  Relayer {} final balance: {} STRK", i + 1, format_units(final_balance, 18));
-            println!("  Predicted final balance: {} STRK", format_units(predicted_final_relayer_balances, 18));
+            println!("  Relayer {} final balance: {} STRK", i + 1, denormalize_felt(final_balance, 18));
+            println!("  Predicted final balance: {} STRK", denormalize_felt(predicted_final_relayer_balances, 18));
             // Verify that balances are equal to the predicted final balances
             // allow 1% of the predicted final balance as tolerance
             // calculate_optimal_target_balance could be off by some amount after converged, so we allow a tolerance
@@ -1397,7 +1397,7 @@ mod integration_tests {
             .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, gas_tank_account.address())
             .await
             .unwrap();
-        println!("💰 Final gas tank balance: {} STRK", format_units(final_gas_tank_balance, 18));
+        println!("💰 Final gas tank balance: {} STRK", denormalize_felt(final_gas_tank_balance, 18));
         assert!(
             final_gas_tank_balance < gas_tank_balance_after_funding,
             "Gas tank balance should have decreased after rebalancing"

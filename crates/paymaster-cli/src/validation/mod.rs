@@ -1,5 +1,5 @@
 use paymaster_starknet::constants::Token;
-use paymaster_starknet::math::format_units;
+use paymaster_starknet::math::denormalize_felt;
 use paymaster_starknet::Client;
 use starknet::core::types::Felt;
 
@@ -13,8 +13,8 @@ pub async fn assert_strk_balance(client: &Client, contract_address: Felt, amount
     if balance < amount {
         return Err(Error::Validation(format!(
             "Insufficient STRK balance: {}, needed: {}",
-            format_units(balance, 18),
-            format_units(amount, 18)
+            denormalize_felt(balance, 18),
+            denormalize_felt(amount, 18)
         )));
     }
 

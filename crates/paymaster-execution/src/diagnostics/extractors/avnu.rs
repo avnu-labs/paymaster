@@ -13,44 +13,36 @@ use starknet::core::types::{Call, Felt};
 use starknet::macros::selector;
 
 /// AVNU Exchange contract address on Starknet mainnet.
-pub const AVNU_EXCHANGE_ADDRESS: Felt = Felt::from_hex_unchecked("0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f");
+pub const AVNU_EXCHANGE_ADDRESS_MAINNET: Felt = Felt::from_hex_unchecked("0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f");
 pub const AVNU_EXCHANGE_ADDRESS_SEPOLIA: Felt = Felt::from_hex_unchecked("0x02c56e8b00dbe2a71e57472685378fc8988bba947e9a99b26a00fade2b4fe7c2");
 
 /// Slippage exceeded - buy_token_min_amount > buy_token_final_amount
-pub const INSUFFICIENT_TOKENS_RECEIVED: &str = "insufficient tokens received";
+const INSUFFICIENT_TOKENS_RECEIVED: &str = "insufficient tokens received";
 
 /// Slippage exceeded - sell_token_max_amount < sell_token_amount in swap_exact_token_to
-pub const INVALID_TOKEN_MAX_AMOUNT: &str = "invalid token from max amount";
+const INVALID_TOKEN_MAX_AMOUNT: &str = "invalid token from max amount";
 
 /// User doesn't have enough tokens to sell
-pub const TOKEN_BALANCE_TOO_LOW: &str = "token from balance is too low";
+const TOKEN_BALANCE_TOO_LOW: &str = "token from balance is too low";
 
 /// Token amount is zero
-pub const TOKEN_AMOUNT_ZERO: &str = "token from amount is 0";
+const TOKEN_AMOUNT_ZERO: &str = "token from amount is 0";
 
 /// Routes array is empty
-pub const ROUTES_EMPTY: &str = "routes is empty";
+const ROUTES_EMPTY: &str = "routes is empty";
 
 /// First route sell token doesn't match
-pub const INVALID_TOKEN_FROM: &str = "invalid token from";
+const INVALID_TOKEN_FROM: &str = "invalid token from";
 
 /// Last route buy token doesn't match
-pub const INVALID_TOKEN_TO: &str = "invalid token to";
+const INVALID_TOKEN_TO: &str = "invalid token to";
 
 /// Unknown exchange in routes
-pub const UNKNOWN_EXCHANGE: &str = "unknown exchange";
+const UNKNOWN_EXCHANGE: &str = "unknown exchange";
 
-pub fn multi_route_swap() -> Felt {
-    selector!("multi_route_swap")
-}
-
-pub fn swap_exact_token_to() -> Felt {
-    selector!("swap_exact_token_to")
-}
-
-pub fn swap_external_solver() -> Felt {
-    selector!("swap_external_solver")
-}
+const MULTI_ROUTE_SWAP_SELECTOR: Felt = selector!("multi_route_swap");
+const SWAP_EXACT_TOKEN_TO_SELECTOR: Felt = selector!("swap_exact_token_to");
+const SWAP_EXTERNAL_SOLVER_SELECTOR: Felt = selector!("swap_external_solver");
 
 /// Categorization of error types for metrics and filtering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -76,7 +68,7 @@ impl ErrorCategory {
             ErrorCategory::InsufficientBalance
         } else if ErrorCategory::is_input_error(error) {
             ErrorCategory::InvalidInput
-        } else if error.to_lowercase().contains(UNKNOWN_EXCHANGE) {
+        } else if ErrorCategory::is_route_not_found_error(error) {
             ErrorCategory::RouteNotFound
         } else {
             ErrorCategory::Unknown
@@ -106,6 +98,11 @@ impl ErrorCategory {
     fn is_input_error(error: &str) -> bool {
         let lower = error.to_lowercase();
         lower.contains(ROUTES_EMPTY) || lower.contains(INVALID_TOKEN_FROM) || lower.contains(INVALID_TOKEN_TO)
+    }
+
+    fn is_route_not_found_error(error: &str) -> bool {
+        let lower = error.to_lowercase();
+        lower.contains(UNKNOWN_EXCHANGE)
     }
 }
 
@@ -143,13 +140,13 @@ impl AvnuExtractor {
         Self { contract_address, token_client }
     }
 
-    /// Calculates slippage percentage from u256 low parts (max_amount, min_amount).
+    /// Computes slippage percentage from u256 low parts (max_amount, min_amount).
     ///
     /// Formula: ((max - min) / max) * 100
     ///
     /// Only uses the low part of u256 values since actual amounts never exceed u128.
     /// Returns None if calculation would divide by zero.
-    fn try_calculate_slippage_percent(max_low: u128, min_low: u128) -> Option<f64> {
+    fn try_compute_slippage_percent(max_low: u128, min_low: u128) -> Option<f64> {
         if max_low == 0 {
             return None;
         }
@@ -233,7 +230,7 @@ impl AvnuExtractor {
             .await;
 
         // Calculate slippage percentage: ((buy_amount - buy_min_amount) / buy_amount) * 100
-        if let Some(slippage_pct) = Self::try_calculate_slippage_percent(felt_to_u128(buy_amount_raw), felt_to_u128(buy_min_amount_raw)) {
+        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(buy_amount_raw), felt_to_u128(buy_min_amount_raw)) {
             metadata.insert("max_slippage_percent", slippage_pct);
         }
 
@@ -285,7 +282,7 @@ impl AvnuExtractor {
             .await;
 
         // Calculate slippage percentage: ((sell_max_amount - sell_amount) / sell_max_amount) * 100
-        if let Some(slippage_pct) = Self::try_calculate_slippage_percent(felt_to_u128(sell_max_amount_raw), felt_to_u128(sell_amount_raw)) {
+        if let Some(slippage_pct) = Self::try_compute_slippage_percent(felt_to_u128(sell_max_amount_raw), felt_to_u128(sell_amount_raw)) {
             metadata.insert("max_slippage_percent", slippage_pct);
         }
 
@@ -320,27 +317,27 @@ impl AvnuExtractor {
     fn find_swap_call<'a>(&self, context: &'a DiagnosticContext) -> Option<&'a Call> {
         context
             .calls_to(self.contract_address)
-            .find(|call| call.selector == multi_route_swap() || call.selector == swap_exact_token_to() || call.selector == swap_external_solver())
+            .find(|call| call.selector == MULTI_ROUTE_SWAP_SELECTOR || call.selector == SWAP_EXACT_TOKEN_TO_SELECTOR || call.selector == SWAP_EXTERNAL_SOLVER_SELECTOR)
     }
 
     /// Extracts swap parameters based on the function selector.
     async fn extract_swap_params(&self, call: &Call) -> Metadata {
-        let mut metadata = if call.selector == multi_route_swap() {
+        let mut metadata = if call.selector == MULTI_ROUTE_SWAP_SELECTOR {
             self.extract_multi_route_swap_params(call).await
-        } else if call.selector == swap_exact_token_to() {
+        } else if call.selector == SWAP_EXACT_TOKEN_TO_SELECTOR {
             self.extract_swap_exact_token_to_params(call).await
-        } else if call.selector == swap_external_solver() {
+        } else if call.selector == SWAP_EXTERNAL_SOLVER_SELECTOR {
             self.extract_swap_external_solver_params(call)
         } else {
             Metadata::new()
         };
 
         // Add the function name for clarity
-        let function_name = if call.selector == multi_route_swap() {
+        let function_name = if call.selector == MULTI_ROUTE_SWAP_SELECTOR {
             "multi_route_swap"
-        } else if call.selector == swap_exact_token_to() {
+        } else if call.selector == SWAP_EXACT_TOKEN_TO_SELECTOR {
             "swap_exact_token_to"
-        } else if call.selector == swap_external_solver() {
+        } else if call.selector == SWAP_EXTERNAL_SOLVER_SELECTOR {
             "swap_external_solver"
         } else {
             "unknown"
@@ -434,12 +431,12 @@ mod tests {
     use paymaster_starknet::ChainID;
 
     fn extractor() -> AvnuExtractor {
-        AvnuExtractor::new(AVNU_EXCHANGE_ADDRESS, TokenClient::mainnet())
+        AvnuExtractor::new(AVNU_EXCHANGE_ADDRESS_MAINNET, TokenClient::mainnet())
     }
 
     fn multi_route_swap_call() -> Call {
         Call {
-            to: AVNU_EXCHANGE_ADDRESS,
+            to: AVNU_EXCHANGE_ADDRESS_MAINNET,
             selector: multi_route_swap(),
             calldata: vec![
                 Token::eth(&ChainID::Mainnet).address,
@@ -459,7 +456,7 @@ mod tests {
 
     fn swap_exact_token_to_call() -> Call {
         Call {
-            to: AVNU_EXCHANGE_ADDRESS,
+            to: AVNU_EXCHANGE_ADDRESS_MAINNET,
             selector: swap_exact_token_to(),
             calldata: vec![
                 Token::eth(&ChainID::Mainnet).address,
@@ -482,22 +479,22 @@ mod tests {
 
         #[test]
         fn should_return_correct_percentage_when_valid_inputs() {
-            assert_eq!(AvnuExtractor::try_calculate_slippage_percent(1000, 950), Some(5.0));
-            assert_eq!(AvnuExtractor::try_calculate_slippage_percent(1000, 1000), Some(0.0));
+            assert_eq!(AvnuExtractor::try_compute_slippage_percent(1000, 950), Some(5.0));
+            assert_eq!(AvnuExtractor::try_compute_slippage_percent(1000, 1000), Some(0.0));
             assert_eq!(
-                AvnuExtractor::try_calculate_slippage_percent(1_000_000_000_000_000_000, 990_000_000_000_000_000),
+                AvnuExtractor::try_compute_slippage_percent(1_000_000_000_000_000_000, 990_000_000_000_000_000),
                 Some(1.0)
             );
         }
 
         #[test]
         fn should_return_none_when_max_is_zero() {
-            assert_eq!(AvnuExtractor::try_calculate_slippage_percent(0, 0), None);
+            assert_eq!(AvnuExtractor::try_compute_slippage_percent(0, 0), None);
         }
 
         #[test]
         fn should_return_none_when_min_greater_than_max() {
-            assert_eq!(AvnuExtractor::try_calculate_slippage_percent(100, 200), None);
+            assert_eq!(AvnuExtractor::try_compute_slippage_percent(100, 200), None);
         }
     }
 
@@ -556,7 +553,7 @@ mod tests {
         async fn should_return_basic_metadata_when_calldata_insufficient() {
             let extractor = extractor();
             let short_call = Call {
-                to: AVNU_EXCHANGE_ADDRESS,
+                to: AVNU_EXCHANGE_ADDRESS_MAINNET,
                 selector: multi_route_swap(),
                 calldata: vec![Felt::ONE, Felt::TWO],
             };

@@ -72,7 +72,7 @@ impl Transaction {
             Ok(estimates) => estimates.into_iter().map(|x| x.overall_fee).sum(),
             Err(e) => {
                 // Extract diagnostic information from the failed simulation
-                self.analyze_simulation_error(&e, &client.diagnostic_client).await;
+                self.report_simulation_error(&client.diagnostic_client, &e).await;
                 return Err(e.into());
             },
         };
@@ -102,7 +102,7 @@ impl Transaction {
     }
 
     /// Analyzes a simulation error and logs diagnostic information.
-    async fn analyze_simulation_error(&self, error: &paymaster_starknet::Error, diagnostic_client: &DiagnosticClient) {
+    async fn report_simulation_error(&self, diagnostic_client: &DiagnosticClient, error: &paymaster_starknet::Error) {
         let calls = self.transaction.calls();
         let user_address = self.transaction.user_address();
         diagnostic_client.report(&calls, user_address, error.to_string()).await;
