@@ -9,7 +9,7 @@ pub struct ClassHash;
 impl ClassHash {
     pub const ARGENT_ACCOUNT: Felt = felt!("0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f");
     pub const BRAAVOS_ACCOUNT: Felt = Felt::from_raw([185241609756504736, 2778776175894593663, 3570588520378882234, 1478234888750183556]);
-    pub const FORWARDER: Felt = felt!("0x054e57545b42b9e06a372026d20238d192bfc5378110670cb0ddb8b295014af9");
+    pub const FORWARDER: Felt = felt!("0x06ef1e3f91ac361a2b84407a032e988799ddb42dda850ab22c20c0e21e4437f1");
 }
 
 /// Contract addresses for different networks
