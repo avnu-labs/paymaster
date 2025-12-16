@@ -155,9 +155,10 @@ mod tests {
         let tokens = HashSet::from([Token::eth(&ChainID::Sepolia).address, Token::usdc(&ChainID::Sepolia).address]);
 
         // When
-        let result = oracle.fetch_tokens(&tokens).await.unwrap();
+        let result = oracle.fetch_tokens(&tokens).await;
 
         // Then
         assert_eq!(2, result.len());
+        assert!(result.iter().all(|r| r.is_ok()));
     }
 }

@@ -104,18 +104,18 @@ impl Client {
         convert_strk_to_token(&token_price, amount, round_up)
     }
 
-    pub async fn fetch_tokens(&self, tokens: &HashSet<Felt>) -> Result<Vec<TokenPrice>, Error> {
+    pub async fn fetch_tokens(&self, tokens: &HashSet<Felt>) -> Vec<Result<TokenPrice, Error>> {
         let mut executor = ConcurrentExecutor::new(self.clone(), 8);
         for token in tokens.iter().cloned() {
             executor.register(task!(|context| { context.fetch_token(token).await }));
         }
 
-        let mut tokens = Vec::with_capacity(tokens.len());
+        let mut results = Vec::with_capacity(tokens.len());
         while let Some(result) = executor.next().await {
-            tokens.push(result.map_err(|e| Error::Internal(e.to_string()))??);
+            results.push(result.map_err(|e| Error::Internal(e.to_string())).and_then(|r| r));
         }
 
-        Ok(tokens)
+        results
     }
 
     #[instrument(name = "fetch_token", skip(self))]

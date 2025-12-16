@@ -24,7 +24,7 @@ impl From<paymaster_prices::TokenPrice> for TokenPrice {
 }
 
 pub async fn get_supported_tokens_endpoint(ctx: &RequestContext<'_>) -> Result<Vec<TokenPrice>, Error> {
-    let tokens = ctx.fetch_available_tokens().await?.into_iter().map(|x| x.into()).collect();
+    let tokens = ctx.fetch_available_tokens().await.into_iter().map(|x| x.into()).collect();
 
     Ok(tokens)
 }

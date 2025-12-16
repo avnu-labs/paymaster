@@ -1,11 +1,8 @@
-use std::collections::HashSet;
 use std::ops::Deref;
 
 use bigdecimal::Zero;
 use hyper::http::Extensions;
-use paymaster_common::concurrency::ConcurrentExecutor;
-use paymaster_common::task;
-use paymaster_prices::{Client as PriceClient, TokenPrice};
+use paymaster_prices::TokenPrice;
 use paymaster_sponsoring::AuthenticatedApiKey;
 
 use crate::context::Context;
@@ -57,21 +54,14 @@ impl<'a> RequestContext<'a> {
         Err(Error::InvalidAPIKey)
     }
 
-    pub async fn fetch_available_tokens(&self) -> Result<Vec<TokenPrice>, Error> {
-        let mut executor: ConcurrentExecutor<PriceClient, Option<TokenPrice>> = ConcurrentExecutor::new(self.context.price.clone(), 8);
-
-        for token in &self.context.configuration.supported_tokens {
-            let token = *token;
-            executor.register(task!(|price| {
-                price
-                    .fetch_tokens(&HashSet::from([token]))
-                    .await
-                    .ok()
-                    .and_then(|prices| prices.into_iter().next())
-                    .filter(|tp| !tp.price_in_strk.is_zero())
-            }));
-        }
-
-        Ok(executor.execute().await.unwrap_or_default().into_iter().flatten().collect())
+    pub async fn fetch_available_tokens(&self) -> Vec<TokenPrice> {
+        self.context
+            .price
+            .fetch_tokens(&self.context.configuration.supported_tokens)
+            .await
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|tp| !tp.price_in_strk.is_zero())
+            .collect()
     }
 }
