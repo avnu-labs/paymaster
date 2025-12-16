@@ -3,7 +3,9 @@ use std::ops::Deref;
 
 use bigdecimal::Zero;
 use hyper::http::Extensions;
-use paymaster_prices::TokenPrice;
+use paymaster_common::concurrency::ConcurrentExecutor;
+use paymaster_common::task;
+use paymaster_prices::{Client as PriceClient, TokenPrice};
 use paymaster_sponsoring::AuthenticatedApiKey;
 
 use crate::context::Context;
@@ -56,20 +58,20 @@ impl<'a> RequestContext<'a> {
     }
 
     pub async fn fetch_available_tokens(&self) -> Result<Vec<TokenPrice>, Error> {
-        let futures = self.context.configuration.supported_tokens.iter().map(|token| {
-            let price_service = &self.context.price;
-            async move { price_service.fetch_tokens(&HashSet::from([*token])).await }
-        });
+        let mut executor: ConcurrentExecutor<PriceClient, Option<TokenPrice>> = ConcurrentExecutor::new(self.context.price.clone(), 8);
 
-        let results = futures::future::join_all(futures).await;
+        for token in &self.context.configuration.supported_tokens {
+            let token = *token;
+            executor.register(task!(|price| {
+                price
+                    .fetch_tokens(&HashSet::from([token]))
+                    .await
+                    .ok()
+                    .and_then(|prices| prices.into_iter().next())
+                    .filter(|tp| !tp.price_in_strk.is_zero())
+            }));
+        }
 
-        let token_prices = results
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter_map(|prices| prices.into_iter().next())
-            .filter(|tp| !tp.price_in_strk.is_zero())
-            .collect();
-
-        Ok(token_prices)
+        Ok(executor.execute().await.unwrap_or_default().into_iter().flatten().collect())
     }
 }
