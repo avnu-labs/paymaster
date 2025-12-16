@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Deref;
 
 use bigdecimal::Zero;
@@ -55,15 +56,20 @@ impl<'a> RequestContext<'a> {
     }
 
     pub async fn fetch_available_tokens(&self) -> Result<Vec<TokenPrice>, Error> {
-        let tokens = self
-            .context
-            .price
-            .fetch_tokens(&self.context.configuration.supported_tokens)
-            .await?
+        let futures = self.context.configuration.supported_tokens.iter().map(|token| {
+            let price_service = &self.context.price;
+            async move { price_service.fetch_tokens(&HashSet::from([*token])).await }
+        });
+
+        let results = futures::future::join_all(futures).await;
+
+        let token_prices = results
             .into_iter()
-            .filter(|x| !x.price_in_strk.is_zero())
+            .filter_map(Result::ok)
+            .filter_map(|prices| prices.into_iter().next())
+            .filter(|tp| !tp.price_in_strk.is_zero())
             .collect();
 
-        Ok(tokens)
+        Ok(token_prices)
     }
 }

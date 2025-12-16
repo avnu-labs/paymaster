@@ -8,11 +8,6 @@ use crate::endpoint::RequestContext;
 use crate::Error;
 
 pub async fn check_service_is_available(ctx: &RequestContext<'_>) -> Result<(), Error> {
-    let tokens = ctx.fetch_available_tokens().await?;
-    if tokens.is_empty() {
-        return Err(Error::ServiceNotAvailable);
-    }
-
     if ctx.context.execution.get_relayer_manager().count_enabled_relayers().await == 0 {
         return Err(Error::ServiceNotAvailable);
     }

@@ -2,9 +2,8 @@ use crate::endpoint::RequestContext;
 use crate::Error;
 
 pub async fn is_available_endpoint(ctx: &RequestContext<'_>) -> Result<bool, Error> {
-    let at_least_one_gas_token = !ctx.fetch_available_tokens().await?.is_empty();
     let at_least_one_relayer = ctx.context.execution.get_relayer_manager().count_enabled_relayers().await > 0;
-    Ok(at_least_one_gas_token && at_least_one_relayer)
+    Ok(at_least_one_relayer)
 }
 
 #[cfg(test)]
