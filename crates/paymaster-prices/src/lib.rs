@@ -112,7 +112,7 @@ impl Client {
 
         let mut results = Vec::with_capacity(tokens.len());
         while let Some(result) = executor.next().await {
-            results.push(result.map_err(|e| Error::Internal(e.to_string())).and_then(|r| r));
+            results.push(result.map_err(|e| Error::Internal(e.to_string())).flatten());
         }
 
         results
