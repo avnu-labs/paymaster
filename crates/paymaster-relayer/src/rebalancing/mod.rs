@@ -521,7 +521,7 @@ mod rebalancing_tests {
     use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
     use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration};
     use starknet::core::types::Felt;
-
+    use starknet::macros::felt_hex;
     use crate::lock::mock::MockLockLayer;
     use crate::lock::{LockLayerConfiguration, RelayerLock};
     use crate::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration, RelayerBalance};
@@ -838,8 +838,8 @@ mod rebalancing_tests {
 
     #[tokio::test]
     async fn test_calculate_optimal_target_balance_3() {
-        let trigger_balance = Felt::from(normalize_felt(8.0, 18));
-        let available_funds = Felt::from(normalize_felt(193.88480268654803, 18));
+        let trigger_balance = normalize_felt(8.0, 18);
+        let available_funds = felt_hex!("0xa82b130cc36657ffe");
 
         let configuration = setup_mock_configuration(
             trigger_balance,
@@ -863,19 +863,19 @@ mod rebalancing_tests {
         let relayers = vec![
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_1,
-                balance: Felt::from(normalize_felt(8.0, 18)), // Above trigger
+                balance: normalize_felt(8.0, 18), // Above trigger
             },
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_2,
-                balance: Felt::from(normalize_felt(8.0, 18)), // Above trigger
+                balance: normalize_felt(8.0, 18), // Above trigger
             },
             RelayerBalance {
                 relayer: StarknetTestEnvironment::RELAYER_3,
-                balance: Felt::from(normalize_felt(1.0, 18)), // Below trigger
+                balance: normalize_felt(1.0, 18), // Below trigger
             },
         ];
 
-        let target_balance_should_be = Felt::from(normalize_felt(70.29493423, 18));
+        let target_balance_should_be = felt_hex!("0x3cf89c63e1c032aaa");
         let target_balance = service.calculate_optimal_target_balance(available_funds, &relayers);
 
         // Target should be >= trigger_balance and distributed homogeneously
