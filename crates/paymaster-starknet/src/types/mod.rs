@@ -13,7 +13,7 @@ impl TypeBuilder {
         Self::default()
     }
 
-    pub fn add_definition(&mut self, name: &str) -> StructDefinitionBuilder {
+    pub fn add_definition(&'_ mut self, name: &str) -> StructDefinitionBuilder<'_> {
         StructDefinitionBuilder {
             builder: self,
 

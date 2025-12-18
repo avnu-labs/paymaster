@@ -14,7 +14,7 @@ use starknet::macros::selector;
 use starknet::providers::{Provider, ProviderError};
 use starknet::signers::{LocalWallet, SigningKey};
 use thiserror::Error;
-use tracing::{error, instrument};
+use tracing::instrument;
 
 pub mod constants;
 pub mod contract;

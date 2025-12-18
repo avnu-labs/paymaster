@@ -40,14 +40,14 @@ impl<'a> TypedValueDecoder<'a> {
         D::decode(self.0)
     }
 
-    pub fn decode_object(&self) -> Result<ObjectValueDecoder, Error> {
+    pub fn decode_object(&self) -> Result<ObjectValueDecoder<'_>, Error> {
         match self.0 {
             Value::Object(v) => Ok(ObjectValueDecoder(v)),
             _ => Err(Error::TypedDataDecoding("value is not an object".to_string())),
         }
     }
 
-    pub fn decode_array(&self) -> Result<ArrayValueDecoder, Error> {
+    pub fn decode_array(&self) -> Result<ArrayValueDecoder<'_>, Error> {
         match self.0 {
             Value::Array(value) => Ok(ArrayValueDecoder { element: 0, value }),
             _ => Err(Error::TypedDataDecoding("value is not an object".to_string())),

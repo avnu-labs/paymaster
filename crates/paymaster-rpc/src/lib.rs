@@ -8,7 +8,6 @@ use paymaster_starknet::Error as StarknetError;
 use serde::Deserialize;
 use starknet::core::types::ContractExecutionError;
 use thiserror::Error;
-use tracing::error;
 
 mod context;
 pub use context::{Configuration, RPCConfiguration};
