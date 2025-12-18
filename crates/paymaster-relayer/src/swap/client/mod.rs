@@ -33,8 +33,31 @@ pub trait Swap: 'static + Send + Sync + Clone {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapClientConfiguration {
-    pub endpoint: String,
-    pub chain_id: ChainID,
+    endpoint: String,
+    chain_id: ChainID,
+}
+
+impl SwapClientConfiguration {
+    pub fn new(chain_id: ChainID) -> Self {
+        match chain_id {
+            ChainID::Sepolia => Self::sepolia(),
+            ChainID::Mainnet => Self::mainnet()
+        }
+    }
+
+    pub fn sepolia() -> Self {
+        Self {
+            endpoint: String::from("https://sepolia.api.avnu.fi/swap/v2"),
+            chain_id: ChainID::Sepolia
+        }
+    }
+
+    pub fn mainnet() -> Self {
+        Self {
+            endpoint: String::from("https://starknet.api.avnu.fi/swap/v2"),
+            chain_id: ChainID::Sepolia
+        }
+    }
 }
 
 impl SwapClientConfiguration {

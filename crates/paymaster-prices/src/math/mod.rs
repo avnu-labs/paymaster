@@ -5,7 +5,7 @@ use starknet::core::types::Felt;
 use crate::{Error, TokenPrice};
 
 pub fn convert_token_to_strk(token: &TokenPrice, amount: Felt) -> Result<Felt, Error> {
-    let amount_scaled = BigDecimal::new(amount.to_bigint(), token.decimals);
+    let amount_scaled = BigDecimal::new(amount.to_bigint(), 18);
     let price_scaled = BigDecimal::from_bigint(token.price_in_strk.to_bigint(), 0);
 
     let amount_in_strk_scaled = amount_scaled * price_scaled;
@@ -23,7 +23,7 @@ pub fn convert_strk_to_token(token: &TokenPrice, amount: Felt, round_up: bool) -
     let price_scaled = BigDecimal::from_bigint(token.price_in_strk.to_bigint(), 18);
     let amount_in_token_scaled = amount_scaled / price_scaled;
 
-    let amount_in_token = amount_in_token_scaled * BigDecimal::from(10_u128.pow(token.decimals as u32));
+    let amount_in_token = amount_in_token_scaled * BigDecimal::from(10_u128.pow(18));
 
     if round_up {
         let (rounded_int, _remainder) = amount_in_token.clone().with_scale(0).into_bigint_and_exponent();
@@ -58,7 +58,6 @@ mod tests {
             let amount = Felt::from(1);
             let wbtc_token_price = TokenPrice {
                 address: felt!("0x3fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac"),
-                decimals: 8,
                 price_in_strk: felt!("0xcf12935faa2a43fbb200"),
             };
 
@@ -75,7 +74,6 @@ mod tests {
             let amount = Felt::from_dec_str("20000000000000000").unwrap();
             let wbtc_token_price = TokenPrice {
                 address: felt!("0x3fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac"),
-                decimals: 8,
                 price_in_strk: felt!("0xcf12935faa2a43fbb200"),
             };
 
@@ -91,7 +89,6 @@ mod tests {
     fn check_consistency() {
         let token = TokenPrice {
             address: Felt::ZERO,
-            decimals: 8,
             price_in_strk: Felt::from((2000.0 * 1e17) as u128),
         };
 
@@ -108,7 +105,6 @@ mod tests {
     fn price_is_zero() {
         let token = TokenPrice {
             address: Felt::ZERO,
-            decimals: 8,
             price_in_strk: Felt::ZERO,
         };
 

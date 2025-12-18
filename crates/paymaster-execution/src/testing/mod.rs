@@ -31,7 +31,6 @@ impl MockPriceOracle for PriceOracle {
         Ok(TokenPrice {
             address: Felt::ZERO,
             price_in_strk: Felt::from(1e18 as u128),
-            decimals: 18,
         })
     }
 }

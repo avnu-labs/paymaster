@@ -8,8 +8,6 @@ use crate::Error;
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct TokenPrice {
     pub token_address: Felt,
-    pub decimals: i64,
-
     pub price_in_strk: Felt,
 }
 
@@ -17,7 +15,6 @@ impl From<paymaster_prices::TokenPrice> for TokenPrice {
     fn from(value: paymaster_prices::TokenPrice) -> Self {
         Self {
             token_address: value.address,
-            decimals: value.decimals,
             price_in_strk: value.price_in_strk,
         }
     }
@@ -59,12 +56,10 @@ mod tests {
                 x if x == StarknetTestEnvironment::ETH => TokenPrice {
                     address: StarknetTestEnvironment::ETH,
                     price_in_strk: Felt::ONE,
-                    decimals: 18,
                 },
                 x if x == StarknetTestEnvironment::USDC => TokenPrice {
                     address: StarknetTestEnvironment::ETH,
                     price_in_strk: Felt::ZERO,
-                    decimals: 18,
                 },
                 _ => unimplemented!(),
             })

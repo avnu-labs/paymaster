@@ -194,7 +194,7 @@ mod tests {
         async fn should_fetch_and_parse_token_info() {
             let client = TokenClient::mainnet();
             let token = client
-                .get_token(Token::eth(&ChainID::Mainnet).address)
+                .get_token(Token::ETH)
                 .await
                 .expect("ETH should exist");
 

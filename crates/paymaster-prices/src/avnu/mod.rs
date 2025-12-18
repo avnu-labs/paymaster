@@ -1,56 +1,66 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use paymaster_common::concurrency::SyncValue;
+use crate::{Error, PriceClient, TokenPrice};
+use paymaster_common::cache::ExpirableCache;
+use paymaster_starknet::constants::Token;
+use paymaster_starknet::math::normalize_felt;
+use paymaster_starknet::ChainID;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client as HTTPClient, Url};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_with::serde_as;
 use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::Felt;
-use tokio::sync::RwLock;
-
-use crate::{Client, Error, PriceOracle, TokenPrice};
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub struct ImpulseTokenPrice {
+#[derive(Deserialize, Clone, Copy, Debug)]
+struct Price {
     #[serde_as(as = "UfeHex")]
+    #[serde(rename = "tokenAddress")]
     pub address: Felt,
 
-    pub decimals: i64,
-
-    #[serde_as(as = "UfeHex")]
-    #[serde(rename = "priceInSTRK")]
-    pub price_in_strk: Felt,
-}
-
-impl From<ImpulseTokenPrice> for TokenPrice {
-    fn from(value: ImpulseTokenPrice) -> Self {
-        Self {
-            address: value.address,
-            decimals: value.decimals,
-            price_in_strk: value.price_in_strk,
-        }
-    }
+    #[serde(rename = "usdPrice")]
+    pub price_in_usd: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AVNUPriceClientConfiguration {
-    pub endpoint: String,
-    pub api_key: Option<String>,
+    endpoint: String,
+    api_key: Option<String>,
+}
+
+impl AVNUPriceClientConfiguration {
+    pub fn new(chain_id: ChainID, api_key: Option<String>) -> Self {
+        match chain_id {
+            ChainID::Sepolia => Self::sepolia(api_key),
+            ChainID::Mainnet => Self::mainnet(api_key)
+        }
+    }
+
+    pub fn sepolia(api_key: Option<String>) -> Self {
+        Self {
+            endpoint: String::from("https://sepolia.api.avnu.fi"),
+            api_key
+        }
+    }
+
+    pub fn mainnet(api_key: Option<String>) -> Self {
+        Self {
+            endpoint: String::from("https://starknet.api.avnu.fi"),
+            api_key
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct AVNUPriceOracle {
     endpoint: String,
     client: HTTPClient,
-    cache: Arc<RwLock<HashMap<Felt, SyncValue<TokenPrice>>>>,
+    cache: ExpirableCache<Felt, Price>
 }
 
-impl From<AVNUPriceOracle> for Client {
+impl From<AVNUPriceOracle> for PriceClient {
     fn from(value: AVNUPriceOracle) -> Self {
         Self::AVNU(value)
     }
@@ -65,99 +75,93 @@ impl AVNUPriceOracle {
 
         Self {
             endpoint: configuration.endpoint.clone(),
-
             client: HTTPClient::builder()
                 .default_headers(headers)
                 .timeout(Duration::from_secs(3))
                 .build()
                 .expect("invalid client"),
 
-            cache: Arc::default(),
+            cache: ExpirableCache::new(128),
         }
     }
-}
 
-#[async_trait]
-impl PriceOracle for AVNUPriceOracle {
-    async fn fetch_token(&self, address: Felt) -> Result<TokenPrice, Error> {
-        let cached_token = self.fetch_token_from_cache(address).await;
-
-        cached_token
-            .read_or_refresh({
-                let this = self.clone();
-                move || Box::pin(async move { this.fetch_token_from_impulse(address).await })
-            })
-            .await
-    }
-}
-
-impl AVNUPriceOracle {
-    async fn fetch_token_from_cache(&self, address: Felt) -> SyncValue<TokenPrice> {
-        if let Some(value) = self.cache.read().await.get(&address) {
-            return value.clone();
+    pub async fn fetch_token(&self, address: &Felt) -> Result<TokenPrice, Error> {
+        let strk_price = self.fetch_token_by_address(&Token::STRK).await?;
+        if !strk_price.price_in_usd.is_normal() {
+            return Err(Error::InvalidPrice(*address))
         }
 
-        let mut write_lock = self.cache.write().await;
-        write_lock
-            .entry(address)
-            .or_insert(SyncValue::new(Duration::from_secs(60)))
-            .clone()
+        let token_price = self.fetch_token_by_address(address).await?;
+
+        Ok(TokenPrice {
+            address: *address,
+            price_in_strk: normalize_felt(token_price.price_in_usd / strk_price.price_in_usd, 18)
+        })
     }
 
-    async fn fetch_token_from_impulse(&self, address: Felt) -> Result<TokenPrice, Error> {
+    async fn fetch_token_by_address(&self, address: &Felt) -> Result<Price, Error> {
+        if let Some(price) = self.fetch_token_from_cache(address) {
+            return Ok(price)
+        }
+
+        self.fetch_token_from_avnu(address).await
+    }
+
+    fn fetch_token_from_cache(&self, address: &Felt) -> Option<Price> {
+        self.cache.get_if_not_expired(address)
+    }
+
+    async fn fetch_token_from_avnu(&self, address: &Felt) -> Result<Price, Error> {
         let url = Url::parse(&self.endpoint)
-            .map_err(|e| Error::URL(e.to_string()))?
-            .query_pairs_mut()
-            .append_pair("token", &format!("0x{:x}", address))
-            .finish()
-            .clone();
+            .and_then(|x| x.join("/v1/tokens/prices"))
+            .map_err(|e| Error::URL(e.to_string()))?;
 
         // Fetch
-        let response = self.client.get(url.clone()).send().await?;
+        let response = self
+            .client
+            .post(url.clone())
+            .json(&json!({ "tokens": [address.to_hex_string()] }))
+            .send()
+            .await?;
+
         let status = response.status();
         let text = response.text().await?;
 
         if !status.is_success() {
-            return Err(Error::Internal(format!("Impulse request error url={} status={}, body={}", url, status, text)));
+            return Err(Error::Internal(format!("request error url={} status={}, body={}", url, status, text)));
         }
 
-        let tokens: Vec<ImpulseTokenPrice> = serde_json::from_str(&text).map_err(|e| Error::Format(e.to_string()))?;
-
-        tokens
+        let price= serde_json::from_str::<Vec<Price>>(&text)
+            .map_err(|e| Error::Format(e.to_string()))?
             .first()
             .cloned()
-            .map(Into::<TokenPrice>::into)
-            .ok_or(Error::Internal("Token not found".to_string()))
+            .ok_or(Error::InvalidPrice(*address))?;
+
+        self.cache.insert(*address, price, Duration::from_secs(3));
+        Ok(price)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use paymaster_starknet::constants::{Endpoint, Token};
-    use paymaster_starknet::ChainID;
+    use paymaster_starknet::constants::Token;
 
     use super::*;
 
-    fn client() -> Client {
-        AVNUPriceOracle::new(&AVNUPriceClientConfiguration {
-            endpoint: Endpoint::default_price_url(&ChainID::Sepolia).to_string(),
-            api_key: None,
-        })
-        .into()
+    fn client() -> AVNUPriceOracle {
+        AVNUPriceOracle::new(&AVNUPriceClientConfiguration::mainnet(None))
     }
 
     #[tokio::test]
     async fn should_return_tokens() {
         // Given
         let oracle = client();
-        let tokens = HashSet::from([Token::eth(&ChainID::Sepolia).address, Token::usdc(&ChainID::Sepolia).address]);
 
         // When
-        let result = oracle.fetch_tokens(&tokens).await.unwrap();
+        let result = oracle.fetch_token(&Token::ETH).await.unwrap();
 
         // Then
-        assert_eq!(2, result.len());
+        assert_eq!(result.address, Token::ETH);
+        assert!(result.price_in_strk > Felt::ZERO);
     }
 }

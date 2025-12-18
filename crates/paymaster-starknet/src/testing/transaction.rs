@@ -7,7 +7,7 @@ use crate::ChainID;
 
 pub fn an_eth_transfer(to: Felt, amount: Felt, chain_id: &ChainID) -> Call {
     Call {
-        to: Token::eth(chain_id).address,
+        to: Token::ETH,
         selector: selector!("transfer"),
         calldata: CalldataBuilder::new().encode(&to).encode(&amount).encode(&Felt::ZERO).build(),
     }

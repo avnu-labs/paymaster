@@ -33,7 +33,6 @@ impl MockPriceOracle for PriceOracle {
         Ok(TokenPrice {
             address,
             price_in_strk: Felt::from(1e18 as u128),
-            decimals: 18,
         })
     }
 }
@@ -79,7 +78,7 @@ impl TestEnvironment {
         let configuration = Configuration {
             rpc: RPCConfiguration { port: 12777 },
 
-            supported_tokens: HashSet::from([Token::eth(starknet.chain_id()).address, Token::usdc(starknet.chain_id()).address]),
+            supported_tokens: HashSet::from([Token::ETH, Token::usdc(starknet.chain_id()).address]),
             forwarder: StarknetTestEnvironment::FORWARDER,
             gas_tank: StarknetAccountConfiguration {
                 address: StarknetTestEnvironment::FORWARDER,

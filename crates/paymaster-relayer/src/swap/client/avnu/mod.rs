@@ -131,17 +131,10 @@ impl Swap for AVNUSwapClient {
 
 #[cfg(test)]
 mod tests {
-    use paymaster_starknet::constants::Endpoint;
-    use paymaster_starknet::ChainID;
-
     use super::*;
 
     fn client() -> SwapClient {
-        AVNUSwapClient::new(&SwapClientConfiguration {
-            endpoint: Endpoint::default_swap_url(&ChainID::Sepolia).to_string(),
-            chain_id: ChainID::Sepolia,
-        })
-        .into()
+        AVNUSwapClient::new(&SwapClientConfiguration::sepolia()).into()
     }
 
     #[tokio::test]

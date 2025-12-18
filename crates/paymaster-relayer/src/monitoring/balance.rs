@@ -62,7 +62,7 @@ impl RelayerBalanceMonitoring {
 
         for relayer in relayers {
             executor.register(task!(|ctx| {
-                ctx.starknet.fetch_balance(Token::strk(ctx.starknet.chain_id()).address, relayer).await.map(|x| (relayer, x))
+                ctx.starknet.fetch_balance(Token::STRK, relayer).await.map(|x| (relayer, x))
             }));
         }
 

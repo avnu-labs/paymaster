@@ -239,7 +239,6 @@ mod tests {
             Ok(TokenPrice {
                 address: Felt::ZERO,
                 price_in_strk: Felt::ZERO,
-                decimals: 18,
             })
         }
     }

@@ -89,6 +89,24 @@ impl<T> WithFallback<T> {
 
         Err(Error::Rejected)
     }
+
+    pub async fn call_all<F>(&self, f: impl Fn(Arc<T>) -> F) -> Result<F::Ok, Error<F::Error>>
+    where
+        F: TryFuture,
+        T: FailurePredicate<F::Error> + Clone,
+    {
+        for value in self.values.iter() {
+            if !value.is_call_permitted() {
+                continue
+            }
+
+            if let Ok(value) = value.call(&f).await {
+                return Ok(value)
+            }
+        }
+
+        Err(Error::Rejected)
+    }
 }
 
 #[cfg(test)]

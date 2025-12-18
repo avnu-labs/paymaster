@@ -8,7 +8,7 @@ pub fn felt_to_u128(felt: Felt) -> Result<u128, Error> {
 }
 
 pub fn normalize_felt(amount: f64, decimals: u32) -> Felt {
-    Felt::from(amount as u128 * 10_u128.pow(decimals))
+    Felt::from((amount * 10_f64.powi(decimals as i32)) as u128)
 }
 
 pub fn denormalize_felt(amount: Felt, decimals: u32) -> f64 {
@@ -24,10 +24,10 @@ mod tests {
 
     #[test]
     fn test_parse_units() {
-        let amount = 1.0;
+        let amount = 1.56;
         let decimals = 18;
         let result = normalize_felt(amount, decimals);
-        assert_eq!(result, Felt::from(1000000000000000000u64));
+        assert_eq!(result, Felt::from(156000000000000000u64));
     }
 
     #[test]

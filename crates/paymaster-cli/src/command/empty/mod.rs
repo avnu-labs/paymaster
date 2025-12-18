@@ -56,7 +56,7 @@ pub async fn empty_paymaster_core(
 
     // Create a transfer call from each relayer
     let chain_id = &configuration.starknet.chain_id;
-    let strk = Token::strk(chain_id).address;
+    let strk = Token::STRK;
     let caller = master_address;
 
     let mut relayers_empty_calls_from_outside = Vec::new();

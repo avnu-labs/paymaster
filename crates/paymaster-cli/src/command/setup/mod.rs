@@ -248,27 +248,21 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         relayers: RelayersConfiguration {
             private_key: shared_relayers_pk,
             addresses: relayers_deployment.addresses,
-            min_relayer_balance: Felt::from(normalize_felt(params.min_relayer_balance, 18)),
+            min_relayer_balance: normalize_felt(params.min_relayer_balance, 18),
             lock: DEFAULT_RELAYERS_LOCK_MODE,
             rebalancing: OptionalRebalancingConfiguration::initialize(Some(RebalancingConfiguration {
                 check_interval: params.rebalancing_check_interval,
-                trigger_balance: Felt::from(normalize_felt(params.rebalancing_trigger_balance, 18)),
+                trigger_balance: normalize_felt(params.rebalancing_trigger_balance, 18),
                 swap_config: SwapConfiguration {
                     slippage: params.swap_slippage,
-                    swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration {
-                        endpoint: Endpoint::default_swap_url(&chain_id).to_string(),
-                        chain_id,
-                    }),
+                    swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration::new(chain_id)),
                     max_price_impact: params.max_price_impact,
                     swap_interval: params.swap_interval,
-                    min_usd_sell_amount: params.min_swap_sell_amount,
+                    min_usd_sell_amount: params.min_swap_sell_amount, 
                 },
             })),
         },
-        price: PriceConfiguration::AVNU(AVNUPriceClientConfiguration {
-            endpoint: Endpoint::default_price_url(&chain_id).to_string(),
-            api_key: None,
-        }),
+        price: PriceConfiguration::AVNU(AVNUPriceClientConfiguration::new(chain_id, None)),
         sponsoring: DEFAULT_SPONSORING_MODE,
     };
 
