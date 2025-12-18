@@ -514,6 +514,12 @@ mod rebalancing_tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
+    use crate::lock::mock::MockLockLayer;
+    use crate::lock::{LockLayerConfiguration, RelayerLock};
+    use crate::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration, RelayerBalance};
+    use crate::swap::client::mock::MockSimpleSwap;
+    use crate::swap::{SwapClientConfigurator, SwapConfiguration};
+    use crate::{Context, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
     use async_trait::async_trait;
     use paymaster_common::service::Service;
     use paymaster_starknet::constants::Token;
@@ -522,12 +528,6 @@ mod rebalancing_tests {
     use paymaster_starknet::{ChainID, Configuration as StarknetConfiguration};
     use starknet::core::types::Felt;
     use starknet::macros::felt_hex;
-    use crate::lock::mock::MockLockLayer;
-    use crate::lock::{LockLayerConfiguration, RelayerLock};
-    use crate::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration, RelayerBalance};
-    use crate::swap::client::mock::MockSimpleSwap;
-    use crate::swap::{SwapClientConfigurator, SwapConfiguration};
-    use crate::{Context, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
 
     #[derive(Debug)]
     pub struct MockLock;
