@@ -11,7 +11,7 @@ use paymaster_starknet::ChainID;
 use serde::{Deserialize, Serialize};
 use starknet::core::types::{Call, Felt};
 
-use crate::swap::client::avnu::AVNUSwapClient;
+use crate::swap::client::avnu::{AVNUSwapClient, DEFAULT_MAINNET_AVNU_SWAP_ENDPOINT, DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT};
 #[cfg(feature = "testing")]
 use crate::swap::client::mock::MockSwapClient;
 
@@ -38,6 +38,27 @@ pub struct SwapClientConfiguration {
 }
 
 impl SwapClientConfiguration {
+    pub fn default_from_chain(chain_id: ChainID) -> Self {
+        match chain_id {
+            ChainID::Sepolia => Self::default_sepolia(),
+            ChainID::Mainnet => Self::default_mainnet(),
+        }
+    }
+
+    pub fn default_mainnet() -> Self {
+        Self {
+            endpoint: DEFAULT_MAINNET_AVNU_SWAP_ENDPOINT.to_string(),
+            chain_id: ChainID::Sepolia,
+        }
+    }
+
+    pub fn default_sepolia() -> Self {
+        Self {
+            endpoint: DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT.to_string(),
+            chain_id: ChainID::Sepolia,
+        }
+    }
+
     /// Validate configuration
     pub fn validate(&self) -> Result<(), ServiceError> {
         // Validate endpoint

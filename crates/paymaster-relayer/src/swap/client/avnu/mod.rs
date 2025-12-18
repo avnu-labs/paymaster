@@ -2,15 +2,17 @@ pub mod models;
 
 use std::time::Duration;
 
+use crate::swap::client::avnu::models::{AVNUBuildedQuote, AVNUQuote};
+use crate::swap::client::{Swap, SwapClientConfiguration};
+use crate::swap::SwapClient;
 use async_trait::async_trait;
 use paymaster_common::service::Error as ServiceError;
 use reqwest::Client as HTTPClient;
 use serde_json::json;
 use starknet::core::types::{Call, Felt};
 
-use crate::swap::client::avnu::models::{AVNUBuildedQuote, AVNUQuote};
-use crate::swap::client::{Swap, SwapClientConfiguration};
-use crate::swap::SwapClient;
+pub const DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT: &str = "https://sepolia.api.avnu.fi/swap/v2";
+pub const DEFAULT_MAINNET_AVNU_SWAP_ENDPOINT: &str = "https://starknet.api.avnu.fi/swap/v2";
 
 #[derive(Clone)]
 pub struct AVNUSwapClient {
@@ -131,19 +133,6 @@ impl Swap for AVNUSwapClient {
 
 #[cfg(test)]
 mod tests {
-    use paymaster_starknet::constants::Endpoint;
-    use paymaster_starknet::ChainID;
-
-    use super::*;
-
-    fn client() -> SwapClient {
-        AVNUSwapClient::new(&SwapClientConfiguration {
-            endpoint: Endpoint::default_swap_url(&ChainID::Sepolia).to_string(),
-            chain_id: ChainID::Sepolia,
-        })
-        .into()
-    }
-
     #[tokio::test]
     async fn should_return_tokens() {}
 }

@@ -1,6 +1,5 @@
 use jsonrpsee::core::Serialize;
 use paymaster_starknet::constants::Token;
-use paymaster_starknet::ChainID;
 use serde::Deserialize;
 use starknet::core::types::Felt;
 
@@ -195,7 +194,7 @@ impl FeeMode {
     pub fn gas_token(&self) -> Felt {
         match self {
             Self::Default { gas_token, tip: _ } => *gas_token,
-            Self::Sponsored { tip: _ } => Token::strk(&ChainID::Mainnet).address,
+            Self::Sponsored { tip: _ } => Token::STRK_ADDRESS,
         }
     }
 

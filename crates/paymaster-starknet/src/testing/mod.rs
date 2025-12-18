@@ -52,7 +52,7 @@ impl TestEnvironment {
         private_key: felt!("0x0000000000000000000000000000000071d7bb07b9a64f6f78ac4c816aff4da9"),
     };
     const CHAIN_ID: ChainID = ChainID::Sepolia;
-    pub const ETH: Felt = Token::eth(&Self::CHAIN_ID).address;
+    pub const ETH: Felt = Token::ETH_ADDRESS;
     pub const FORWARDER: Felt = felt!("0x04c4b4e84d06f13690dfbd43fae5cc0e7f122756e50df2236b41ca6afff775e6");
     pub const GAS_TANK: StarknetAccountConfiguration = StarknetAccountConfiguration {
         address: felt!("0x064b48806902a367c8598f4f95c305e8c1a1acba5f082d294a43793113115691"),
@@ -63,7 +63,7 @@ impl TestEnvironment {
     pub const RELAYER_2: Felt = felt!("0x0365133c36063dabe51611dd8a83ca4a31944ea87bd7ef3da576b754be098dc1");
     pub const RELAYER_3: Felt = felt!("0x055c5d84d644301e4d2375c93868484c94a76bd68a565620bda3473efb4cf9a0");
     pub const RELAYER_PRIVATE_KEY: Felt = felt!("0x0000000000000000000000000000000071d7bb07b9a64f6f78ac4c816aff4da9");
-    pub const STRK: Felt = Token::strk(&Self::CHAIN_ID).address;
+    pub const STRK: Felt = Token::STRK_ADDRESS;
     pub const USDC: Felt = Token::usdc(&Self::CHAIN_ID).address;
 
     pub async fn new() -> Self {

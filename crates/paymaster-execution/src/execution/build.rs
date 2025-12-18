@@ -333,7 +333,7 @@ mod tests {
             transaction: TransactionParameters::Invoke {
                 invoke: InvokeParameters {
                     user_address: account.address(),
-                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::from(42), test.starknet.chain_id())]),
+                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::from(42))]),
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -492,7 +492,7 @@ mod tests {
                 },
                 invoke: InvokeParameters {
                     user_address: new_account_address,
-                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::ZERO, test.starknet.chain_id())]),
+                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::ZERO)]),
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -554,7 +554,7 @@ mod tests {
                 },
                 invoke: InvokeParameters {
                     user_address: account_2.address(),
-                    calls: Calls::new(vec![an_eth_transfer(account_2.address(), Felt::ZERO, test.starknet.chain_id())]),
+                    calls: Calls::new(vec![an_eth_transfer(account_2.address(), Felt::ZERO)]),
                 },
             },
             parameters: ExecutionParameters::V1 {

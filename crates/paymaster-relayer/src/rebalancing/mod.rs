@@ -245,7 +245,7 @@ impl RelayerRebalancingService {
             executor.register(task!(|env| {
                 let balance = env
                     .starknet
-                    .fetch_balance(Token::strk(env.starknet.chain_id()).address, relayer)
+                    .fetch_balance(Token::STRK_ADDRESS, relayer)
                     .await
                     .map_err(ServiceError::from)?;
 
@@ -320,7 +320,7 @@ impl RelayerRebalancingService {
         let gas_tank_strk_balance = match self
             .context
             .starknet
-            .fetch_balance(Token::strk(self.context.starknet.chain_id()).address, self.gas_tank.address())
+            .fetch_balance(Token::STRK_ADDRESS, self.gas_tank.address())
             .await
         {
             Ok(balance) => balance,
@@ -359,7 +359,7 @@ impl RelayerRebalancingService {
 
         // Remove the STRK token from the supported tokens before swapping
         let mut supported_tokens_without_strk = self.supported_tokens.clone();
-        supported_tokens_without_strk.remove(&Token::strk(self.context.starknet.chain_id()).address);
+        supported_tokens_without_strk.remove(&Token::STRK_ADDRESS);
 
         for token in &supported_tokens_without_strk {
             // Get token balance with error handling
@@ -381,7 +381,7 @@ impl RelayerRebalancingService {
                 .swap_client
                 .swap(
                     *token,
-                    Token::strk(self.context.starknet.chain_id()).address,
+                    Token::STRK_ADDRESS,
                     token_balance,
                     self.gas_tank.address(),
                     self.swap_configuration.slippage,
@@ -439,7 +439,7 @@ impl RelayerRebalancingService {
 
             // Only create a transfer call if the relayer needs funds
             if amount_needed > Felt::ZERO {
-                calls.push(TokenTransfer::new(Token::strk(self.context.starknet.chain_id()).address, relayer.relayer, amount_needed).to_call());
+                calls.push(TokenTransfer::new(Token::STRK_ADDRESS, relayer.relayer, amount_needed).to_call());
                 min_amount_needed += amount_needed;
             }
         }
@@ -1287,7 +1287,7 @@ mod integration_tests {
         for (i, relayer_address) in relayer_addresses.iter().enumerate() {
             let initial_balance = test_env
                 .starknet
-                .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, *relayer_address)
+                .fetch_balance(Token::STRK_ADDRESS, *relayer_address)
                 .await
                 .unwrap();
             println!("  Relayer {} initial balance: {} STRK", i + 1, initial_balance);
@@ -1303,14 +1303,14 @@ mod integration_tests {
             .starknet
             .transfer_token(
                 &funding_account,
-                &TokenTransfer::new(Token::strk(test_env.starknet.chain_id()).address, gas_tank_account.address(), gas_tank_funding_amount),
+                &TokenTransfer::new(Token::STRK_ADDRESS, gas_tank_account.address(), gas_tank_funding_amount),
             )
             .await;
 
         // Verify gas tank balance
         let gas_tank_balance_after_funding = test_env
             .starknet
-            .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, gas_tank_account.address())
+            .fetch_balance(Token::STRK_ADDRESS, gas_tank_account.address())
             .await
             .unwrap();
         println!("✅ Gas tank balance: {} STRK", denormalize_felt(gas_tank_balance_after_funding, 18));
@@ -1374,7 +1374,7 @@ mod integration_tests {
         for (i, relayer_address) in relayer_addresses.iter().enumerate() {
             let final_balance = test_env
                 .starknet
-                .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, *relayer_address)
+                .fetch_balance(Token::STRK_ADDRESS, *relayer_address)
                 .await
                 .unwrap();
             println!("  Relayer {} final balance: {} STRK", i + 1, denormalize_felt(final_balance, 18));
@@ -1396,9 +1396,10 @@ mod integration_tests {
         // 8. Verify that gas tank balance decreased
         let final_gas_tank_balance = test_env
             .starknet
-            .fetch_balance(Token::strk(test_env.starknet.chain_id()).address, gas_tank_account.address())
+            .fetch_balance(Token::STRK_ADDRESS, gas_tank_account.address())
             .await
             .unwrap();
+
         println!("💰 Final gas tank balance: {} STRK", denormalize_felt(final_gas_tank_balance, 18));
         assert!(
             final_gas_tank_balance < gas_tank_balance_after_funding,

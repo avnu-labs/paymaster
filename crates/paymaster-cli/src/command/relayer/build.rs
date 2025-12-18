@@ -34,7 +34,7 @@ impl RelayerDeployment {
 
         let fund_transfer = Transfer {
             recipient: deploy_relayer.address,
-            token: Token::strk(starknet.chain_id()).address,
+            token: Token::STRK_ADDRESS,
             amount: fund,
         };
 

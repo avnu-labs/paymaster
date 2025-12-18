@@ -13,10 +13,12 @@ use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
 use paymaster_relayer::{Context as RelayerContext, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
 use paymaster_rpc::RPCConfiguration;
 use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, VerbosityConfiguration};
-use paymaster_starknet::constants::{Endpoint, Token};
+use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
-use paymaster_starknet::{ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration};
+use paymaster_starknet::{
+    ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration, DEFAULT_MAINNET_RPC_ENDPOINT, DEFAULT_SEPOLIA_RPC_ENDPOINT,
+};
 use starknet::accounts::ConnectedAccount;
 use starknet::core::types::{Call, Felt};
 use starknet::signers::SigningKey;
@@ -115,7 +117,11 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
 
     // Load the configuration
     let chain_id = ChainID::from_string(&params.chain_id).expect("invalid chain-id");
-    let default_rpc_url = Endpoint::default_rpc_url(&chain_id);
+    let default_rpc_url = match chain_id {
+        ChainID::Sepolia => DEFAULT_SEPOLIA_RPC_ENDPOINT,
+        ChainID::Mainnet => DEFAULT_MAINNET_RPC_ENDPOINT,
+    };
+
     let rpc_url = params.rpc_url.unwrap_or_else(|| default_rpc_url.to_string());
     let gas_tank_fund_in_fri = normalize_felt(params.fund, 18);
     let estimate_account_fund_in_fri = normalize_felt(params.estimate_account_fund, 18);
@@ -255,20 +261,14 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
                 trigger_balance: Felt::from(normalize_felt(params.rebalancing_trigger_balance, 18)),
                 swap_config: SwapConfiguration {
                     slippage: params.swap_slippage,
-                    swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration {
-                        endpoint: Endpoint::default_swap_url(&chain_id).to_string(),
-                        chain_id,
-                    }),
+                    swap_client_config: SwapClientConfigurator::AVNU(SwapClientConfiguration::default_from_chain(chain_id)),
                     max_price_impact: params.max_price_impact,
                     swap_interval: params.swap_interval,
                     min_usd_sell_amount: params.min_swap_sell_amount,
                 },
             })),
         },
-        price: PriceConfiguration::AVNU(AVNUPriceClientConfiguration {
-            endpoint: Endpoint::default_price_url(&chain_id).to_string(),
-            api_key: None,
-        }),
+        price: PriceConfiguration::AVNU(AVNUPriceClientConfiguration::default_from_chain(chain_id)),
         sponsoring: DEFAULT_SPONSORING_MODE,
     };
 

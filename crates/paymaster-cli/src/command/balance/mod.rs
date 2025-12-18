@@ -30,7 +30,7 @@ async fn compute_table_for_accounts(account_name: &str, starknet: &Client, accou
     let mut executor = ConcurrentExecutor::new(starknet.clone(), nb_accounts);
     for &account in &accounts {
         executor.register(task!(|env| {
-            let balance = env.fetch_balance(Token::strk(env.chain_id()).address, account).await?;
+            let balance = env.fetch_balance(Token::STRK_ADDRESS, account).await?;
 
             Ok::<BalanceResult, paymaster_starknet::Error>(BalanceResult { address: account, balance })
         }));

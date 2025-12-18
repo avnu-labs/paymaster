@@ -124,7 +124,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
 
         refund_call = Some(
             Transfer {
-                token: Token::strk(&chain_id).address,
+                token: Token::STRK_ADDRESS,
                 recipient: gas_tank.address(),
                 amount: additional_strk_balance,
             }

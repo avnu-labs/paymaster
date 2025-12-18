@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::{Client, Error, PriceOracle, TokenPrice};
 use async_trait::async_trait;
 use paymaster_common::concurrency::SyncValue;
+use paymaster_starknet::ChainID;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client as HTTPClient, Url};
 use serde::{Deserialize, Serialize};
@@ -12,7 +14,8 @@ use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::Felt;
 use tokio::sync::RwLock;
 
-use crate::{Client, Error, PriceOracle, TokenPrice};
+pub const DEFAULT_IMPULSE_SEPOLIA_ENDPOINT: &str = "https://sepolia.impulse.avnu.fi/v2/tokens/prices";
+pub const DEFAULT_IMPULSE_MAINNET_ENDPOINT: &str = "https://starknet.impulse.avnu.fi/v2/tokens/prices";
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -41,6 +44,29 @@ impl From<ImpulseTokenPrice> for TokenPrice {
 pub struct AVNUPriceClientConfiguration {
     pub endpoint: String,
     pub api_key: Option<String>,
+}
+
+impl AVNUPriceClientConfiguration {
+    pub fn default_from_chain(chain_id: ChainID) -> Self {
+        match chain_id {
+            ChainID::Sepolia => Self::default_sepolia(),
+            ChainID::Mainnet => Self::default_mainnet(),
+        }
+    }
+
+    pub fn default_sepolia() -> Self {
+        Self {
+            endpoint: DEFAULT_IMPULSE_SEPOLIA_ENDPOINT.to_string(),
+            api_key: None,
+        }
+    }
+
+    pub fn default_mainnet() -> Self {
+        Self {
+            endpoint: DEFAULT_IMPULSE_MAINNET_ENDPOINT.to_string(),
+            api_key: None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -135,14 +161,14 @@ impl AVNUPriceOracle {
 mod tests {
     use std::collections::HashSet;
 
-    use paymaster_starknet::constants::{Endpoint, Token};
+    use paymaster_starknet::constants::Token;
     use paymaster_starknet::ChainID;
 
     use super::*;
 
     fn client() -> Client {
         AVNUPriceOracle::new(&AVNUPriceClientConfiguration {
-            endpoint: Endpoint::default_price_url(&ChainID::Sepolia).to_string(),
+            endpoint: "https://sepolia.impulse.avnu.fi/v2/tokens/prices".to_string(),
             api_key: None,
         })
         .into()
@@ -152,7 +178,7 @@ mod tests {
     async fn should_return_tokens() {
         // Given
         let oracle = client();
-        let tokens = HashSet::from([Token::eth(&ChainID::Sepolia).address, Token::usdc(&ChainID::Sepolia).address]);
+        let tokens = HashSet::from([Token::ETH_ADDRESS, Token::usdc(&ChainID::Sepolia).address]);
 
         // When
         let result = oracle.fetch_tokens(&tokens).await;

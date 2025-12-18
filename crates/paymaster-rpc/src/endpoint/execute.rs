@@ -161,11 +161,7 @@ mod tests {
             transaction: TransactionParameters::Invoke {
                 invoke: InvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    calls: vec![an_eth_transfer(
-                        StarknetTestEnvironment::ACCOUNT_2.address,
-                        Felt::ONE,
-                        &context.configuration.starknet.chain_id,
-                    )],
+                    calls: vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::ONE)],
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -219,11 +215,7 @@ mod tests {
             transaction: TransactionParameters::Invoke {
                 invoke: InvokeParameters {
                     user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
-                    calls: vec![an_eth_transfer(
-                        StarknetTestEnvironment::ACCOUNT_2.address,
-                        Felt::ONE,
-                        &request_context.configuration.starknet.chain_id,
-                    )],
+                    calls: vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::ONE)],
                 },
             },
             parameters: ExecutionParameters::V1 {

@@ -307,7 +307,7 @@ mod tests {
             transaction: TransactionParameters::Invoke {
                 invoke: InvokeParameters {
                     user_address: user.address,
-                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::ONE, test.starknet.chain_id())]),
+                    calls: Calls::new(vec![an_eth_transfer(account.address(), Felt::ONE)]),
                 },
             },
             parameters: ExecutionParameters::V1 {
@@ -387,7 +387,7 @@ mod tests {
                 deployment: deployment.clone(),
                 invoke: InvokeParameters {
                     user_address: new_account_address,
-                    calls: Calls::new(vec![an_eth_approve(account.address(), Felt::ZERO, test.starknet.chain_id())]),
+                    calls: Calls::new(vec![an_eth_approve(account.address(), Felt::ZERO)]),
                 },
             },
             parameters: ExecutionParameters::V1 {

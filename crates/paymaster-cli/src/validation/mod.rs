@@ -7,7 +7,7 @@ use crate::core::Error;
 
 pub async fn assert_strk_balance(client: &Client, contract_address: Felt, amount: Felt) -> Result<(), Error> {
     let balance = client
-        .fetch_balance(Token::strk(client.chain_id()).address, contract_address)
+        .fetch_balance(Token::STRK_ADDRESS, contract_address)
         .await
         .map_err(|e| Error::Validation(e.to_string()))?;
     if balance < amount {

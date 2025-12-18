@@ -17,7 +17,7 @@ impl GasTankDeployment {
         let gas_tank_deployment = DeployArgentAccount::initialize(&starknet, private_key).await;
         // Fund the gas tank with the amount of STRK specified in the parameters (1 STRK will be used as reserve)
         let transfer_call = Transfer {
-            token: Token::strk(starknet.chain_id()).address,
+            token: Token::STRK_ADDRESS,
             recipient: gas_tank_deployment.address,
             amount: fund,
         }

@@ -193,10 +193,7 @@ mod tests {
         #[tokio::test]
         async fn should_fetch_and_parse_token_info() {
             let client = TokenClient::mainnet();
-            let token = client
-                .get_token(Token::eth(&ChainID::Mainnet).address)
-                .await
-                .expect("ETH should exist");
+            let token = client.get_token(Token::ETH_ADDRESS).await.expect("ETH should exist");
 
             assert_eq!(token.symbol, "ETH");
             assert_eq!(token.decimals, 18);

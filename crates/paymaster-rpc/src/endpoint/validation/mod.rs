@@ -75,9 +75,9 @@ mod tests {
             RequestContext::new(&context, &extensions)
         };
         
-        let eth = Token::eth(&context.configuration.starknet.chain_id);
-        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
-        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
+        let eth = Token::ETH_ADDRESS;
+        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth, tip: TipPriority::Normal })).await.unwrap();
+        check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Default { gas_token: eth, tip: TipPriority::Normal })).await.unwrap();
         assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.is_err());
         check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.unwrap();
     }
@@ -105,9 +105,9 @@ mod tests {
             
             RequestContext::new(&context, &extensions)
         };
-        let eth = Token::eth(&context.configuration.starknet.chain_id);
-        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
-        check_is_allowed_fee_mode(&granted_api_key, &params(FeeMode::Default { gas_token: eth.address, tip: TipPriority::Normal })).await.unwrap();
+        let eth = Token::ETH_ADDRESS;
+        check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Default { gas_token: eth, tip: TipPriority::Normal })).await.unwrap();
+        check_is_allowed_fee_mode(&granted_api_key, &params(FeeMode::Default { gas_token: eth, tip: TipPriority::Normal })).await.unwrap();
         
         assert!(check_is_allowed_fee_mode(&no_api_key, &params(FeeMode::Sponsored { tip: TipPriority::Normal})).await.is_err());
         assert!(check_is_allowed_fee_mode(&dummy_api_key, &params(FeeMode::Sponsored{ tip: TipPriority::Normal})).await.is_err());

@@ -112,7 +112,7 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
 
     let fund_gas_tank_transfer = Transfer {
         recipient: configuration.gas_tank.address,
-        token: Token::strk(starknet.chain_id()).address,
+        token: Token::STRK_ADDRESS,
         amount: fund_gas_tank_in_fri,
     };
 

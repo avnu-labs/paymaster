@@ -5,7 +5,6 @@ use starknet::macros::selector;
 
 use crate::constants::Token;
 use crate::transaction::call::calldata::CalldataBuilder;
-use crate::ChainID;
 
 pub struct StrkTransfer(TokenTransfer);
 
@@ -18,8 +17,8 @@ impl Deref for StrkTransfer {
 }
 
 impl StrkTransfer {
-    pub fn new(sender: Felt, amount: Felt, chain_id: &ChainID) -> Self {
-        Self(TokenTransfer::new(Token::strk(chain_id).address, sender, amount))
+    pub fn new(sender: Felt, amount: Felt) -> Self {
+        Self(TokenTransfer::new(Token::STRK_ADDRESS, sender, amount))
     }
 
     pub fn to_call(&self) -> Call {

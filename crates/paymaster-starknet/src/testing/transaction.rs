@@ -3,11 +3,10 @@ use starknet::macros::selector;
 
 use crate::constants::Token;
 use crate::transaction::CalldataBuilder;
-use crate::ChainID;
 
-pub fn an_eth_transfer(to: Felt, amount: Felt, chain_id: &ChainID) -> Call {
+pub fn an_eth_transfer(to: Felt, amount: Felt) -> Call {
     Call {
-        to: Token::eth(chain_id).address,
+        to: Token::ETH_ADDRESS,
         selector: selector!("transfer"),
         calldata: CalldataBuilder::new().encode(&to).encode(&amount).encode(&Felt::ZERO).build(),
     }

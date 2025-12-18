@@ -447,7 +447,7 @@ mod tests {
             to: AVNU_EXCHANGE_ADDRESS_MAINNET,
             selector: MULTI_ROUTE_SWAP_SELECTOR,
             calldata: vec![
-                Token::eth(&ChainID::Mainnet).address,
+                Token::ETH_ADDRESS,
                 Felt::from(1000000u64),
                 Felt::ZERO,
                 Token::usdc(&ChainID::Mainnet).address,
@@ -467,7 +467,7 @@ mod tests {
             to: AVNU_EXCHANGE_ADDRESS_MAINNET,
             selector: SWAP_EXACT_TOKEN_TO_SELECTOR,
             calldata: vec![
-                Token::eth(&ChainID::Mainnet).address,
+                Token::ETH_ADDRESS,
                 Felt::from(1000000u64),
                 Felt::ZERO,
                 Felt::from(1200000u64),
@@ -533,7 +533,7 @@ mod tests {
             assert_eq!(diagnostic.contract_name, "avnu");
             assert_eq!(diagnostic.error_category, "slippage".to_string());
             assert!(matches!(diagnostic.metadata.get("function"), Some(DiagnosticValue::String(s)) if s == "multi_route_swap"));
-            assert!(matches!(diagnostic.metadata.get("sell_token"), Some(DiagnosticValue::Felt(addr)) if *addr == Token::eth(&ChainID::Mainnet).address));
+            assert!(matches!(diagnostic.metadata.get("sell_token"), Some(DiagnosticValue::Felt(addr)) if *addr == Token::ETH_ADDRESS));
             assert!(matches!(diagnostic.metadata.get("buy_token"), Some(DiagnosticValue::Felt(addr)) if *addr == Token::usdc(&ChainID::Mainnet).address));
 
             // Slippage: (2000000 - 1900000) / 2000000 * 100 = 5%
