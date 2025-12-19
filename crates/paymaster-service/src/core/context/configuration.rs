@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::str::FromStr;
 
@@ -92,9 +92,10 @@ impl Into<paymaster_prices::PriceConfiguration> for Configuration {
                     starknet: general.starknet.clone(),
                 }
                 .into(),
-                PriceOracleConfiguration::Coingecko { endpoint, api_key } => CoingeckoPriceClientConfiguration {
+                PriceOracleConfiguration::Coingecko { endpoint, api_key, address_to_id } => CoingeckoPriceClientConfiguration {
                     endpoint,
                     api_key,
+                    address_to_id,
                     starknet: general.starknet.clone(),
                 }
                 .into(),
@@ -130,7 +131,11 @@ pub enum PriceOracleConfiguration {
     AVNU { endpoint: String, api_key: Option<String> },
 
     #[serde(rename = "coingecko")]
-    Coingecko { endpoint: String, api_key: Option<String> },
+    Coingecko {
+        endpoint: String,
+        api_key: Option<String>,
+        address_to_id: HashMap<Felt, String>
+    },
 }
 
 #[serde_as]

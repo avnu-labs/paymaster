@@ -4,7 +4,6 @@ use paymaster_common::concurrency::ConcurrentExecutor;
 use serde::{Deserialize, Serialize};
 use starknet::core::types::Felt;
 use thiserror::Error;
-
 use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 
 pub mod avnu;
@@ -137,8 +136,8 @@ pub enum PriceClient {
 }
 
 impl FailurePredicate<Error> for PriceClient {
-    fn is_err(&self, _: &Error) -> bool {
-        true
+    fn is_err(&self, err: &Error) -> bool {
+        matches!(err, Error::HTTP(_))
     }
 }
 

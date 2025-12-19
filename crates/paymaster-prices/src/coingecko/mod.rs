@@ -18,6 +18,7 @@ use crate::{Error, PriceClient, PriceOracleConfiguration, TokenPrice};
 pub struct CoingeckoPriceClientConfiguration {
     pub endpoint: String,
     pub api_key: Option<String>,
+    pub address_to_id: HashMap<Felt, String>,
 
     pub starknet: StarknetConfiguration,
 }
@@ -33,6 +34,8 @@ pub struct CoingeckoPriceClient {
     endpoint: String,
     client: reqwest::Client,
 
+    address_to_id: HashMap<Felt, String>,
+
     resolver: DecimalsResolver,
     cache: ExpirableCache<Felt, Price>,
 }
@@ -43,8 +46,8 @@ impl From<CoingeckoPriceClient> for PriceClient {
     }
 }
 
-#[derive(Deserialize)]
-struct PriceResponse(HashMap<Felt, Price>);
+#[derive(Debug, Deserialize)]
+struct PriceResponse(HashMap<String, Price>);
 
 #[derive(Deserialize, Debug, Clone, Copy)]
 struct Price {
@@ -61,6 +64,8 @@ impl CoingeckoPriceClient {
         Self {
             endpoint: configuration.endpoint.to_string(),
             client: ClientBuilder::new().default_headers(headers).build().expect("invalid client"),
+
+            address_to_id: configuration.address_to_id.clone(),
 
             resolver: DecimalsResolver::new(&configuration.starknet),
             cache: ExpirableCache::new(128),
@@ -96,19 +101,21 @@ impl CoingeckoPriceClient {
     }
 
     async fn fetch_token_from_coingecko(&self, token: &Felt) -> Result<Price, Error> {
-        let tokens = [token].map(|x| x.to_hex_string()).join(",");
+        let token_id = self
+            .address_to_id
+            .get(token)
+            .ok_or(Error::Internal(format!("unknown token {:?}", token.to_hex_string())))?;
 
         let mut url = Url::parse(&self.endpoint)
-            .and_then(|x| x.join("/api/v3/simple/token_price/starknet"))
+            .and_then(|x| x.join("/api/v3/simple/price"))
             .map_err(|x| Error::URL(x.to_string()))?;
 
         url.query_pairs_mut()
-            .append_pair("contract_addresses", &tokens)
+            .append_pair("ids", token_id)
             .append_pair("vs_currencies", "usd");
 
         let response: PriceResponse = self.client.get(url).send().await?.json().await?;
-
-        let price = response.0.get(token).cloned().ok_or(Error::InvalidPrice(*token))?;
+        let price = response.0.get(token_id).cloned().ok_or(Error::InvalidPrice(*token))?;
 
         self.cache.insert(*token, price, Duration::from_secs(3));
         Ok(price)
@@ -117,10 +124,10 @@ impl CoingeckoPriceClient {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use paymaster_starknet::constants::Token;
-    use paymaster_starknet::{ChainID, DEFAULT_SEPOLIA_RPC_ENDPOINT};
+    use paymaster_starknet::{ChainID, DEFAULT_MAINNET_RPC_ENDPOINT};
     use starknet::core::types::Felt;
-
     use crate::coingecko::{CoingeckoPriceClient, CoingeckoPriceClientConfiguration};
 
     #[tokio::test]
@@ -129,9 +136,15 @@ mod tests {
         let oracle = CoingeckoPriceClient::new(&CoingeckoPriceClientConfiguration {
             endpoint: "https://api.coingecko.com".to_string(),
             api_key: None,
+
+            address_to_id: HashMap::from([
+                (Token::ETH_ADDRESS, "ethereum".to_string()),
+                (Token::STRK_ADDRESS, "starknet".to_string()),
+            ]),
+
             starknet: paymaster_starknet::Configuration {
-                endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
-                chain_id: ChainID::Sepolia,
+                endpoint: DEFAULT_MAINNET_RPC_ENDPOINT.to_string(),
+                chain_id: ChainID::Mainnet,
                 timeout: 10,
                 fallbacks: vec![],
             },
