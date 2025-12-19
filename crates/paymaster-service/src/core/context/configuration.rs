@@ -92,7 +92,11 @@ impl Into<paymaster_prices::PriceConfiguration> for Configuration {
                     starknet: general.starknet.clone(),
                 }
                 .into(),
-                PriceOracleConfiguration::Coingecko { endpoint, api_key, address_to_id } => CoingeckoPriceClientConfiguration {
+                PriceOracleConfiguration::Coingecko {
+                    endpoint,
+                    api_key,
+                    address_to_id,
+                } => CoingeckoPriceClientConfiguration {
                     endpoint,
                     api_key,
                     address_to_id,
@@ -134,7 +138,7 @@ pub enum PriceOracleConfiguration {
     Coingecko {
         endpoint: String,
         api_key: Option<String>,
-        address_to_id: HashMap<Felt, String>
+        address_to_id: HashMap<Felt, String>,
     },
 }
 

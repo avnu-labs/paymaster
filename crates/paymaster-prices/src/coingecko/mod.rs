@@ -124,11 +124,11 @@ impl CoingeckoPriceClient {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use crate::coingecko::{CoingeckoPriceClient, CoingeckoPriceClientConfiguration};
     use paymaster_starknet::constants::Token;
     use paymaster_starknet::{ChainID, DEFAULT_MAINNET_RPC_ENDPOINT};
     use starknet::core::types::Felt;
-    use crate::coingecko::{CoingeckoPriceClient, CoingeckoPriceClientConfiguration};
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn should_return_tokens() {
@@ -137,10 +137,7 @@ mod tests {
             endpoint: "https://api.coingecko.com".to_string(),
             api_key: None,
 
-            address_to_id: HashMap::from([
-                (Token::ETH_ADDRESS, "ethereum".to_string()),
-                (Token::STRK_ADDRESS, "starknet".to_string()),
-            ]),
+            address_to_id: HashMap::from([(Token::ETH_ADDRESS, "ethereum".to_string()), (Token::STRK_ADDRESS, "starknet".to_string())]),
 
             starknet: paymaster_starknet::Configuration {
                 endpoint: DEFAULT_MAINNET_RPC_ENDPOINT.to_string(),

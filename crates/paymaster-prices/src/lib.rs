@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
+use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 use paymaster_common::concurrency::ConcurrentExecutor;
 use serde::{Deserialize, Serialize};
 use starknet::core::types::Felt;
 use thiserror::Error;
-use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 
 pub mod avnu;
 pub mod coingecko;
@@ -177,10 +177,10 @@ impl PriceClient {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use async_trait::async_trait;
     use paymaster_starknet::constants::Token;
     use starknet::macros::felt_dec;
+    use std::sync::Arc;
 
     use super::*;
     use crate::mock::MockPriceOracle;
