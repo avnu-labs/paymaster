@@ -192,7 +192,7 @@ mod tests {
         fn configuration() -> RelayerManagerConfiguration {
             RelayerManagerConfiguration {
                 starknet: StarknetConfiguration {
-                    endpoint: "dummy".to_string(),
+                    endpoint: "https://dummy".to_string(),
                     chain_id: ChainID::Sepolia,
                     timeout: 10,
                     fallbacks: vec![],
