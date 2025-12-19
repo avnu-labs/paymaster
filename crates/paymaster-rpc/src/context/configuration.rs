@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use paymaster_prices::Configuration as PriceConfiguration;
+use paymaster_prices::PriceConfiguration;
 use paymaster_relayer::RelayersConfiguration;
 use paymaster_sponsoring::Configuration as SponsoringConfiguration;
 use paymaster_starknet::{Configuration as StarknetConfiguration, StarknetAccountConfiguration};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::core::types::Felt;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Configuration {
     pub rpc: RPCConfiguration,
 

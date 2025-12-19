@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use async_trait::async_trait;
 use paymaster_common::concurrency::ConcurrentExecutor;
 use serde::{Deserialize, Serialize};
 use starknet::core::types::Felt;
@@ -9,15 +8,19 @@ use thiserror::Error;
 use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 
 pub mod avnu;
+pub mod coingecko;
 
 pub mod math;
 
+mod decimals;
 #[cfg(feature = "testing")]
 pub mod mock;
 
+use paymaster_common::service::fallback::{FailurePredicate, WithFallback};
 use paymaster_common::service::tracing::instrument;
 use paymaster_common::{log_if_error, measure_duration, metric, task};
 
+use crate::coingecko::{CoingeckoPriceClient, CoingeckoPriceClientConfiguration};
 use crate::math::{convert_strk_to_token, convert_token_to_strk};
 
 #[derive(Error, Debug)]
@@ -42,54 +45,52 @@ pub enum Error {
 pub struct TokenPrice {
     pub address: Felt,
     pub decimals: i64,
-
     pub price_in_strk: Felt,
 }
 
-#[async_trait]
-pub trait PriceOracle: 'static + Send + Sync + Clone {
-    async fn fetch_token(&self, address: Felt) -> Result<TokenPrice, Error>;
+#[derive(Clone, Debug)]
+pub struct PriceConfiguration {
+    pub principal: PriceOracleConfiguration,
+    pub fallbacks: Vec<PriceOracleConfiguration>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "provider", rename_all = "snake_case")]
-pub enum Configuration {
+#[derive(Clone, Debug)]
+pub enum PriceOracleConfiguration {
     #[cfg(feature = "testing")]
-    #[serde(skip)]
     Mock(std::sync::Arc<dyn mock::MockPriceOracle>),
 
-    #[serde(rename = "avnu")]
     AVNU(AVNUPriceClientConfiguration),
+    Coingecko(CoingeckoPriceClientConfiguration),
 }
 
 #[cfg(feature = "testing")]
-impl Configuration {
+impl PriceOracleConfiguration {
     pub fn mock<T: mock::MockPriceOracle>() -> Self {
         Self::Mock(std::sync::Arc::new(T::new()))
     }
 }
 
 #[derive(Clone)]
-pub enum Client {
-    #[cfg(feature = "testing")]
-    Mock(std::sync::Arc<dyn mock::MockPriceOracle>),
-
-    AVNU(AVNUPriceOracle),
+pub struct Client {
+    client: WithFallback<PriceClient>,
 }
 
 impl Client {
-    pub fn new(configuration: &Configuration) -> Self {
-        match configuration {
-            #[cfg(feature = "testing")]
-            Configuration::Mock(x) => Self::Mock(x.clone()),
+    pub fn new(configuration: &PriceConfiguration) -> Self {
+        let mut client = WithFallback::new().with(PriceClient::new(&configuration.principal));
 
-            Configuration::AVNU(x) => Self::AVNU(AVNUPriceOracle::new(x)),
+        for fallback in configuration.fallbacks.iter() {
+            client = client.with(PriceClient::new(fallback));
         }
+
+        Self { client }
     }
 
     #[cfg(feature = "testing")]
     pub fn mock<I: 'static + mock::MockPriceOracle>() -> Self {
-        Self::Mock(std::sync::Arc::new(I::new()))
+        Self {
+            client: WithFallback::new().with(PriceClient::mock::<I>()),
+        }
     }
 
     pub async fn convert_token_to_strk(&self, token: Felt, amount: Felt) -> Result<Felt, Error> {
@@ -118,13 +119,53 @@ impl Client {
         results
     }
 
+    pub async fn fetch_token(&self, token: Felt) -> Result<TokenPrice, Error> {
+        self.client
+            .call_all(|x| async move { x.fetch_token(token).await })
+            .await
+            .map_err(|_| Error::Internal("could not fetch price".to_string()))
+    }
+}
+
+#[derive(Clone)]
+pub enum PriceClient {
+    #[cfg(feature = "testing")]
+    Mock(std::sync::Arc<dyn mock::MockPriceOracle>),
+
+    AVNU(AVNUPriceOracle),
+    Coingecko(CoingeckoPriceClient),
+}
+
+impl FailurePredicate<Error> for PriceClient {
+    fn is_err(&self, _: &Error) -> bool {
+        true
+    }
+}
+
+impl PriceClient {
+    pub fn new(configuration: &PriceOracleConfiguration) -> Self {
+        match configuration {
+            #[cfg(feature = "testing")]
+            PriceOracleConfiguration::Mock(x) => Self::Mock(x.clone()),
+
+            PriceOracleConfiguration::Coingecko(x) => Self::Coingecko(CoingeckoPriceClient::new(x)),
+            PriceOracleConfiguration::AVNU(x) => Self::AVNU(AVNUPriceOracle::new(x)),
+        }
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn mock<I: 'static + mock::MockPriceOracle>() -> Self {
+        Self::Mock(std::sync::Arc::new(I::new()))
+    }
+
     #[instrument(name = "fetch_token", skip(self))]
     pub async fn fetch_token(&self, address: Felt) -> Result<TokenPrice, Error> {
         let (result, duration) = measure_duration!(log_if_error!(match self {
             #[cfg(feature = "testing")]
             Self::Mock(oracle) => oracle.fetch_token(address).await,
 
-            Self::AVNU(oracle) => oracle.fetch_token(address).await,
+            Self::AVNU(oracle) => oracle.fetch_token(&address).await,
+            Self::Coingecko(oracle) => oracle.fetch_token(&address).await,
         }));
 
         metric!(counter[price_request] = 1, method = "fetch_token");
@@ -132,5 +173,74 @@ impl Client {
         metric!(on error result => counter [ price_request_error ] = 1, method = "fetch_token");
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use async_trait::async_trait;
+    use paymaster_starknet::constants::Token;
+    use starknet::macros::felt_dec;
+
+    use super::*;
+    use crate::mock::MockPriceOracle;
+
+    #[derive(Debug)]
+    struct SuccessClient;
+
+    #[async_trait]
+    impl MockPriceOracle for SuccessClient {
+        fn new() -> Self
+        where
+            Self: Sized,
+        {
+            Self
+        }
+
+        async fn fetch_token(&self, _address: Felt) -> Result<TokenPrice, Error> {
+            Ok(TokenPrice {
+                address: Token::ETH_ADDRESS,
+                decimals: 18,
+                price_in_strk: felt_dec!("50"),
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct FailureClient;
+
+    #[async_trait]
+    impl MockPriceOracle for FailureClient {
+        fn new() -> Self
+        where
+            Self: Sized,
+        {
+            Self
+        }
+
+        async fn fetch_token(&self, _address: Felt) -> Result<TokenPrice, Error> {
+            Err(Error::Internal(String::new()))
+        }
+    }
+
+    #[tokio::test]
+    async fn should_use_fallback_properly() {
+        // Given
+        let oracle = Client::new(&PriceConfiguration {
+            principal: PriceOracleConfiguration::Mock(Arc::new(FailureClient)),
+            fallbacks: vec![
+                PriceOracleConfiguration::Mock(Arc::new(FailureClient)),
+                PriceOracleConfiguration::Mock(Arc::new(SuccessClient)),
+            ],
+        });
+
+        // When
+        let mut results = oracle.fetch_tokens(&HashSet::from([Token::ETH_ADDRESS])).await;
+        let result = results.remove(0).unwrap();
+
+        // Then
+        assert_eq!(result.address, Token::ETH_ADDRESS);
+        assert!(result.price_in_strk > Felt::ZERO);
     }
 }

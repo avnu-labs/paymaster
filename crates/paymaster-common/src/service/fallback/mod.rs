@@ -7,8 +7,8 @@ use failsafe::futures::CircuitBreaker;
 pub use failsafe::FailurePredicate;
 use failsafe::{backoff, Config, StateMachine};
 use futures_core::TryFuture;
-pub type Error<E> = failsafe::Error<E>;
 
+pub type Error<E> = failsafe::Error<E>;
 type FailurePolicy = ConsecutiveFailures<Exponential>;
 
 struct Fallback<T> {
@@ -76,6 +76,27 @@ impl<T> WithFallback<T> {
         self
     }
 
+    /// Attempts to execute a function with the first available fallback value.
+    ///
+    /// This method iterates through the configured fallback values and attempts to
+    /// execute the provided function with the first value that is permitted to be called
+    /// (i.e., not in a circuit breaker open state). If a value is found and the call
+    /// is permitted, it executes the function and returns immediately, regardless of
+    /// whether the call succeeds or fails.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A function that takes an `Arc<T>` and returns a future that can fail
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(F::Ok)` - If a permitted value was found and the function executed successfully
+    /// * `Err(Error::Rejected)` - If no fallback values are available or all are circuit-broken
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - A future type that implements `TryFuture`
+    /// * `T` - Must implement `FailurePredicate<F::Error>` to determine what constitutes a failure
     pub async fn call<F>(&self, f: impl FnOnce(Arc<T>) -> F) -> Result<F::Ok, Error<F::Error>>
     where
         F: TryFuture,
@@ -84,6 +105,56 @@ impl<T> WithFallback<T> {
         for value in self.values.iter() {
             if value.is_call_permitted() {
                 return value.call(f).await;
+            }
+        }
+
+        Err(Error::Rejected)
+    }
+
+    /// Attempts to execute a function with all available fallback values until one succeeds.
+    ///
+    /// This method iterates through all configured fallback values and attempts to execute
+    /// the provided function with each value that is permitted to be called (i.e., not in
+    /// a circuit breaker open state). Unlike `call()`, this method will try multiple fallback
+    /// values if earlier ones fail, continuing until it finds one that succeeds or all
+    /// permitted values have been exhausted.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A function that takes an `Arc<T>` and returns a future that can fail.
+    ///   Note: This must be `Fn` (not `FnOnce`) since it may be called multiple times
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(F::Ok)` - If any fallback value succeeded in executing the function
+    /// * `Err(Error::Rejected)` - If no fallback values are available, all are circuit-broken,
+    ///   or all permitted values failed to execute successfully
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - A future type that implements `TryFuture`
+    /// * `T` - Must implement `FailurePredicate<F::Error>` to determine what constitutes a failure
+    ///
+    /// # Behavior
+    ///
+    /// The function will:
+    /// 1. Skip any fallback values that are not permitted (circuit breaker is open)
+    /// 2. Try each permitted value in sequence
+    /// 3. Return immediately upon the first successful execution
+    /// 4. Continue to the next value if the current one fails
+    /// 5. Return `Error::Rejected` only if all values fail or none are permitted
+    pub async fn call_all<F>(&self, f: impl Fn(Arc<T>) -> F) -> Result<F::Ok, Error<F::Error>>
+    where
+        F: TryFuture,
+        T: FailurePredicate<F::Error> + Clone,
+    {
+        for value in self.values.iter() {
+            if !value.is_call_permitted() {
+                continue;
+            }
+
+            if let Ok(value) = value.call(&f).await {
+                return Ok(value);
             }
         }
 

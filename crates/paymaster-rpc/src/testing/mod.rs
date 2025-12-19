@@ -108,7 +108,10 @@ impl TestEnvironment {
             },
 
             starknet: starknet.configuration(),
-            price: paymaster_prices::Configuration::Mock(Arc::new(PriceOracle)),
+            price: paymaster_prices::PriceConfiguration {
+                principal: paymaster_prices::PriceOracleConfiguration::Mock(Arc::new(PriceOracle)),
+                fallbacks: vec![],
+            },
             sponsoring: paymaster_sponsoring::Configuration::none(),
         };
 

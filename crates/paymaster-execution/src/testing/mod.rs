@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use paymaster_prices::mock::MockPriceOracle;
-use paymaster_prices::{Error, TokenPrice};
+use paymaster_prices::{Error, PriceOracleConfiguration, TokenPrice};
 use paymaster_relayer::lock::mock::MockLockLayer;
 use paymaster_relayer::lock::{LockLayerConfiguration, RelayerLock};
 use paymaster_relayer::RelayersConfiguration;
@@ -76,7 +76,10 @@ impl TestEnvironment {
         Self {
             configuration: Configuration {
                 starknet: starknet.configuration(),
-                price: paymaster_prices::Configuration::mock::<PriceOracle>(),
+                price: paymaster_prices::PriceConfiguration {
+                    principal: PriceOracleConfiguration::mock::<PriceOracle>(),
+                    fallbacks: vec![],
+                },
                 supported_tokens: HashSet::from([Token::usdc(starknet.chain_id()).address]),
                 max_fee_multiplier: 3.0,
                 provider_fee_overhead: 0.1,

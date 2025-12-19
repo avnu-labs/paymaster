@@ -49,22 +49,22 @@ unless all variables are set via command line or environment variables."
 impl Into<paymaster_rpc::Configuration> for Context {
     fn into(self) -> paymaster_rpc::Configuration {
         paymaster_rpc::Configuration {
-            rpc: self.configuration.rpc,
+            rpc: self.configuration.rpc.clone(),
 
             forwarder: self.configuration.forwarder,
             gas_tank: self.configuration.gas_tank,
 
-            supported_tokens: self.configuration.supported_tokens,
+            supported_tokens: self.configuration.supported_tokens.clone(),
 
             max_fee_multiplier: self.configuration.max_fee_multiplier,
             provider_fee_overhead: self.configuration.provider_fee_overhead,
 
             estimate_account: self.configuration.estimate_account,
 
-            relayers: self.configuration.relayers,
+            relayers: self.configuration.relayers.clone(),
 
-            starknet: self.configuration.starknet,
-            price: self.configuration.price,
+            starknet: self.configuration.starknet.clone(),
+            price: self.configuration.clone().into(),
             sponsoring: self.configuration.sponsoring,
         }
     }

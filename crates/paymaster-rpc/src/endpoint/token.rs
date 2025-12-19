@@ -9,7 +9,6 @@ use crate::Error;
 pub struct TokenPrice {
     pub token_address: Felt,
     pub decimals: i64,
-
     pub price_in_strk: Felt,
 }
 

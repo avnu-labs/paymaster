@@ -3,6 +3,7 @@ mod execution;
 use std::cmp::max;
 use std::collections::HashSet;
 
+use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
 pub use execution::*;
 
 pub mod diagnostics;
@@ -13,15 +14,14 @@ pub mod testing;
 
 mod error;
 mod starknet;
-use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
+
 use diagnostics::DiagnosticClient;
 pub use error::Error;
 use paymaster_common::{measure_duration, metric};
-use paymaster_prices::{Client as PriceClient, Configuration as PriceConfiguration};
+use paymaster_prices::{Client as PriceClient, PriceConfiguration};
 use paymaster_relayer::{LockedRelayer, RelayerManager, RelayerManagerConfiguration, RelayersConfiguration};
 use paymaster_starknet::transaction::{Calls, EstimatedCalls};
 use paymaster_starknet::{Configuration as StarknetConfiguration, ContractAddress, StarknetAccount, StarknetAccountConfiguration};
-use serde::Deserialize;
 use thiserror::Error;
 mod filter;
 
@@ -30,7 +30,7 @@ pub use filter::TransactionDuplicateFilter;
 use crate::starknet::Client as Starknet;
 
 /// Execution client configuration
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Configuration {
     /// Account used to estimate transaction. This account should only be used
     /// for estimate purpose and its nonce must never change. In the case where

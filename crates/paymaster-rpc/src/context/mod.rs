@@ -1,7 +1,6 @@
 mod configuration;
 pub use configuration::{Configuration, RPCConfiguration};
-use paymaster_execution::Client as ExecutionClient;
-use paymaster_execution::TransactionDuplicateFilter;
+use paymaster_execution::{Client as ExecutionClient, TransactionDuplicateFilter};
 use paymaster_prices::Client as PriceClient;
 use paymaster_sponsoring::Client as SponsoringClient;
 

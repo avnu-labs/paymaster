@@ -3,7 +3,8 @@ use std::fs;
 use std::str::FromStr;
 
 use paymaster_common::service::monitoring::Configuration as MonitoringConfiguration;
-use paymaster_prices::Configuration as PriceConfiguration;
+use paymaster_prices::avnu::AVNUPriceClientConfiguration;
+use paymaster_prices::coingecko::CoingeckoPriceClientConfiguration;
 use paymaster_relayer::RelayersConfiguration;
 use paymaster_sponsoring::Configuration as SponsoringConfiguration;
 use paymaster_starknet::{Configuration as StarknetConfiguration, StarknetAccountConfiguration};
@@ -79,6 +80,57 @@ impl Configuration {
 
         fs::write(path, data).map_err(|e| Error::Configuration(e.to_string()))
     }
+}
+
+impl Into<paymaster_prices::PriceConfiguration> for Configuration {
+    fn into(self) -> paymaster_prices::PriceConfiguration {
+        fn to_price_oracle(general: &Configuration, oracle: PriceOracleConfiguration) -> paymaster_prices::PriceOracleConfiguration {
+            match oracle {
+                PriceOracleConfiguration::AVNU { endpoint, api_key } => AVNUPriceClientConfiguration {
+                    endpoint,
+                    api_key,
+                    starknet: general.starknet.clone(),
+                }
+                .into(),
+                PriceOracleConfiguration::Coingecko { endpoint, api_key } => CoingeckoPriceClientConfiguration {
+                    endpoint,
+                    api_key,
+                    starknet: general.starknet.clone(),
+                }
+                .into(),
+            }
+        }
+
+        let (principal, fallbacks) = match &self.price {
+            PriceConfiguration::Single(x) => (x.clone(), vec![]),
+            PriceConfiguration::WithFallback { principal, fallbacks } => (principal.clone(), fallbacks.clone()),
+        };
+
+        paymaster_prices::PriceConfiguration {
+            principal: to_price_oracle(&self, principal),
+            fallbacks: fallbacks.into_iter().map(|x| to_price_oracle(&self, x)).collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PriceConfiguration {
+    Single(PriceOracleConfiguration),
+    WithFallback {
+        principal: PriceOracleConfiguration,
+        fallbacks: Vec<PriceOracleConfiguration>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "provider", rename_all = "snake_case")]
+pub enum PriceOracleConfiguration {
+    #[serde(rename = "avnu")]
+    AVNU { endpoint: String, api_key: Option<String> },
+
+    #[serde(rename = "coingecko")]
+    Coingecko { endpoint: String, api_key: Option<String> },
 }
 
 #[serde_as]

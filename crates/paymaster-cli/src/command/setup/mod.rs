@@ -5,14 +5,13 @@ use std::time::Duration;
 
 use clap::Args;
 use paymaster_common::service::Service;
-use paymaster_prices::avnu::AVNUPriceClientConfiguration;
-use paymaster_prices::Configuration as PriceConfiguration;
+use paymaster_prices::avnu::{DEFAULT_PRICE_MAINNET_ENDPOINT, DEFAULT_PRICE_SEPOLIA_ENDPOINT};
 use paymaster_relayer::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration};
 use paymaster_relayer::swap::client::SwapClientConfiguration;
 use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
 use paymaster_relayer::{Context as RelayerContext, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
 use paymaster_rpc::RPCConfiguration;
-use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, VerbosityConfiguration};
+use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, PriceConfiguration, PriceOracleConfiguration, VerbosityConfiguration};
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
@@ -268,7 +267,14 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
                 },
             })),
         },
-        price: PriceConfiguration::AVNU(AVNUPriceClientConfiguration::default_from_chain(chain_id)),
+        price: PriceConfiguration::Single(PriceOracleConfiguration::AVNU {
+            endpoint: match chain_id {
+                ChainID::Sepolia => DEFAULT_PRICE_SEPOLIA_ENDPOINT,
+                ChainID::Mainnet => DEFAULT_PRICE_MAINNET_ENDPOINT,
+            }
+            .to_string(),
+            api_key: None,
+        }),
         sponsoring: DEFAULT_SPONSORING_MODE,
     };
 
