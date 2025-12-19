@@ -41,8 +41,8 @@ pub mod testing;
 
 mod client;
 
-pub const DEFAULT_SEPOLIA_RPC_ENDPOINT: &str = "https://starknet-sepolia.public.blastapi.io/rpc/v0_9";
-pub const DEFAULT_MAINNET_RPC_ENDPOINT: &str = "https://starknet-mainnet.public.blastapi.io/rpc/v0_9";
+pub const DEFAULT_SEPOLIA_RPC_ENDPOINT: &str = "https://rpc.starknet-testnet.lava.build/rpc/v0_9";
+pub const DEFAULT_MAINNET_RPC_ENDPOINT: &str = "https://rpc.starknet.lava.build/rpc/v0_9";
 
 pub type StarknetAccount = SingleOwnerAccount<StarknetClient, LocalWallet>;
 
@@ -154,33 +154,6 @@ pub struct Configuration {
 
     #[serde(default)]
     pub fallbacks: Vec<String>,
-}
-
-impl Configuration {
-    pub fn default_from_chain(chain_id: ChainID) -> Self {
-        match chain_id {
-            ChainID::Sepolia => Self::default_sepolia(),
-            ChainID::Mainnet => Self::default_mainnet(),
-        }
-    }
-
-    pub fn default_mainnet() -> Self {
-        Self {
-            chain_id: ChainID::Sepolia,
-            endpoint: DEFAULT_MAINNET_RPC_ENDPOINT.to_string(),
-            fallbacks: vec![],
-            timeout: 10,
-        }
-    }
-
-    pub fn default_sepolia() -> Self {
-        Self {
-            chain_id: ChainID::Sepolia,
-            endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
-            fallbacks: vec![],
-            timeout: 10,
-        }
-    }
 }
 
 #[derive(Clone)]

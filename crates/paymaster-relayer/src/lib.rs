@@ -191,7 +191,12 @@ mod tests {
 
         fn configuration() -> RelayerManagerConfiguration {
             RelayerManagerConfiguration {
-                starknet: StarknetConfiguration::default_sepolia(),
+                starknet: StarknetConfiguration {
+                    endpoint: "dummy".to_string(),
+                    chain_id: ChainID::Sepolia,
+                    timeout: 10,
+                    fallbacks: vec![],
+                },
                 supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
                 gas_tank: StarknetAccountConfiguration {
                     address: felt!("0x0"),

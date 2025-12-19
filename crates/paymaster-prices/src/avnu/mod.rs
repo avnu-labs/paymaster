@@ -166,18 +166,10 @@ mod tests {
 
     use super::*;
 
-    fn client() -> Client {
-        AVNUPriceOracle::new(&AVNUPriceClientConfiguration {
-            endpoint: "https://sepolia.impulse.avnu.fi/v2/tokens/prices".to_string(),
-            api_key: None,
-        })
-        .into()
-    }
-
     #[tokio::test]
     async fn should_return_tokens() {
         // Given
-        let oracle = client();
+        let oracle: Client = AVNUPriceOracle::new(&AVNUPriceClientConfiguration::default_sepolia()).into();
         let tokens = HashSet::from([Token::ETH_ADDRESS, Token::usdc(&ChainID::Sepolia).address]);
 
         // When

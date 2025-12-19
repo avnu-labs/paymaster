@@ -11,8 +11,8 @@ use reqwest::Client as HTTPClient;
 use serde_json::json;
 use starknet::core::types::{Call, Felt};
 
-pub const DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT: &str = "https://sepolia.api.avnu.fi/swap/v2";
-pub const DEFAULT_MAINNET_AVNU_SWAP_ENDPOINT: &str = "https://starknet.api.avnu.fi/swap/v2";
+pub const DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT: &str = "https://sepolia.api.avnu.fi/swap/v3";
+pub const DEFAULT_MAINNET_AVNU_SWAP_ENDPOINT: &str = "https://starknet.api.avnu.fi/swap/v3";
 
 #[derive(Clone)]
 pub struct AVNUSwapClient {
