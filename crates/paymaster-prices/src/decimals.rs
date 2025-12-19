@@ -46,9 +46,9 @@ impl DecimalsResolver {
                 calldata: vec![],
             })
             .await
-            .map_err(|_| Error::InvalidPrice(*token))?;
+            .map_err(|_| Error::InvalidDecimals(*token))?;
 
-        let value = results.get(0).cloned().ok_or(Error::InvalidPrice(*token))?;
+        let value = results.first().cloned().ok_or(Error::InvalidPrice(*token))?;
 
         let decimals = felt_to_u128(value).map(|x| x as i64).map_err(|_| Error::InvalidPrice(*token))?;
 

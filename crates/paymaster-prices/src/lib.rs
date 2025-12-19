@@ -36,6 +36,9 @@ pub enum Error {
     #[error("price is invalid {0}")]
     InvalidPrice(Felt),
 
+    #[error("decimals are invalid {0}")]
+    InvalidDecimals(Felt),
+
     #[error("Price error: {0}")]
     Internal(String),
 }
