@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use opentelemetry::global;
 use opentelemetry_otlp::{MetricExporter, Protocol, WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::Resource;
 use tracing::Subscriber;
 use tracing_opentelemetry::MetricsLayer;
@@ -8,6 +10,8 @@ use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
 
 use crate::service::monitoring::Configuration;
+
+const METRIC_EXPORT_INTERVAL_SECONDS: u64 = 30;
 
 #[macro_export]
 macro_rules! measure_duration {
@@ -53,8 +57,12 @@ impl Metric {
             .build()
             .expect("could not build metric exporter");
 
+        let reader = PeriodicReader::builder(exporter)
+            .with_interval(Duration::from_secs(METRIC_EXPORT_INTERVAL_SECONDS))
+            .build();
+
         let provider = SdkMeterProvider::builder()
-            .with_periodic_exporter(exporter)
+            .with_reader(reader)
             .with_resource(Resource::builder().with_service_name("paymaster").build())
             .build();
 
