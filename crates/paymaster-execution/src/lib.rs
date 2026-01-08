@@ -67,6 +67,7 @@ impl From<Configuration> for RelayerManagerConfiguration {
             gas_tank: value.gas_tank,
             supported_tokens: value.supported_tokens,
             relayers: value.relayers,
+            price: value.price,
         }
     }
 }

@@ -1,3 +1,4 @@
+use paymaster_prices::Client as PriceClient;
 use paymaster_starknet::Client;
 
 use crate::lock::LockLayer;
@@ -14,6 +15,7 @@ pub struct Context {
     pub starknet: Client,
     pub relayers: Relayers,
     pub relayers_locks: LockLayer,
+    pub price: PriceClient,
 }
 
 impl Context {
@@ -25,10 +27,12 @@ impl Context {
 
         let starknet = Client::new(&configuration.starknet);
         let relayers = Relayers::new(&starknet, &configuration.relayers);
+        let price = PriceClient::new(&configuration.price);
         Self {
             starknet,
             relayers,
             relayers_locks: LockLayer::new(&configuration),
+            price,
             configuration,
         }
     }

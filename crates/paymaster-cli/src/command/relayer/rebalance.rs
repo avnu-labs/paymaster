@@ -76,6 +76,7 @@ pub async fn command_relayers_rebalance(params: RelayersRebalanceCommandParamete
         gas_tank: configuration.gas_tank.clone(),
         relayers: configuration.relayers.clone(),
         supported_tokens: configuration.supported_tokens.clone(),
+        price: configuration.price.clone(),
     }))
     .await;
 

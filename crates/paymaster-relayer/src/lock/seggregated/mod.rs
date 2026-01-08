@@ -134,6 +134,17 @@ mod tests {
     use crate::lock::LockLayerConfiguration;
     use crate::rebalancing::OptionalRebalancingConfiguration;
     use crate::{RelayerManagerConfiguration, RelayersConfiguration};
+    use paymaster_prices::mock::MockPriceOracle;
+    use paymaster_prices::Configuration as PriceConfiguration;
+
+    #[derive(Debug)]
+    pub struct MockPrice;
+
+    impl MockPriceOracle for MockPrice {
+        fn new() -> Self {
+            Self
+        }
+    }
 
     fn locking_layer(relayers: Vec<Felt>) -> SeggregatedLockLayer {
         SeggregatedLockLayer::new(&RelayerManagerConfiguration {
@@ -157,6 +168,7 @@ mod tests {
                 },
                 rebalancing: OptionalRebalancingConfiguration::initialize(None),
             },
+            price: PriceConfiguration::mock::<MockPrice>(),
         })
     }
 

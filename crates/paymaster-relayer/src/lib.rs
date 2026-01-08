@@ -22,6 +22,7 @@ pub use rebalancing::RelayerManagerConfiguration;
 
 use crate::monitoring::availability::EnabledRelayersService;
 use crate::monitoring::balance::RelayerBalanceMonitoring;
+use crate::monitoring::gas_tank::GasTankBalanceMonitoring;
 
 mod monitoring;
 pub mod rebalancing;
@@ -75,6 +76,7 @@ impl RelayerManager {
         let mut services = TokioServiceManager::new(context.clone());
         services.spawn::<RelayerBalanceMonitoring>();
         services.spawn::<EnabledRelayersService>();
+        services.spawn::<GasTankBalanceMonitoring>();
 
         // Start the rebalancing service if configured
         if configuration.relayers.rebalancing.has_configuration() {
@@ -163,6 +165,17 @@ mod tests {
         use crate::lock::{LockLayerConfiguration, RelayerLock};
         use crate::rebalancing::{OptionalRebalancingConfiguration, RelayerManagerConfiguration};
         use crate::{RelayerManager, RelayersConfiguration};
+        use paymaster_prices::mock::MockPriceOracle;
+        use paymaster_prices::Configuration as PriceConfiguration;
+
+        #[derive(Debug)]
+        pub struct MockPrice;
+
+        impl MockPriceOracle for MockPrice {
+            fn new() -> Self {
+                Self
+            }
+        }
 
         #[derive(Debug)]
         pub struct Lock;
@@ -209,6 +222,7 @@ mod tests {
                     lock: LockLayerConfiguration::mock_with_timeout::<Lock>(Duration::from_secs(5)),
                     rebalancing: OptionalRebalancingConfiguration::initialize(None),
                 },
+                price: PriceConfiguration::mock::<MockPrice>(),
             }
         }
 

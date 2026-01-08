@@ -13,6 +13,7 @@ deadpool-redis = { workspace = true }
 futures = { workspace = true }
 paymaster-starknet = { path = "../paymaster-starknet" }
 paymaster-common = { path = "../paymaster-common" }
+paymaster-prices = { path = "../paymaster-prices" }
 reqwest = {workspace = true, features = ["json"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
