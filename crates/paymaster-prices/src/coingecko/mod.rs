@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::decimals::DecimalsResolver;
+use crate::{Error, PriceClient, PriceOracleConfiguration, TokenPrice};
 use paymaster_common::cache::ExpirableCache;
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::normalize_felt;
@@ -11,23 +13,21 @@ use reqwest::{ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use starknet::core::types::Felt;
 use starknet::macros::felt_hex;
-use crate::decimals::DecimalsResolver;
-use crate::{Error, PriceClient, PriceOracleConfiguration, TokenPrice};
 
 pub const DEFAULT_COINGECKO_PRICE_ENDPOINT: &str = "https://api.coingecko.com";
 
 pub const DEFAULT_COINGECKO_SEPOLIA_TOKENS: [(Felt, &str); 3] = [
     (felt_hex!("0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7"), "ethereum"), // EHT
-    (felt_hex!("0x512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343"), "usd-coin"), // USDC
-    (felt_hex!("0x30de54c07e57818ae4a1210f2a3018a0b9521b8f8ae5206605684741650ac25"), "wrapped-steth") // wstETH
+    (felt_hex!("0x512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343"), "usd-coin"),  // USDC
+    (felt_hex!("0x30de54c07e57818ae4a1210f2a3018a0b9521b8f8ae5206605684741650ac25"), "wrapped-steth"), // wstETH
 ];
 
 pub const DEFAULT_COINGECKO_MAINNET_TOKENS: [(Felt, &str); 5] = [
     (felt_hex!("0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7"), "ethereum"), // EHT
     (felt_hex!("0x033068F6539f8e6e6b131e6B2B814e6c34A5224bC66947c47DaB9dFeE93b35fb"), "usd-coin"), // USDC
-    (felt_hex!("0x068F5c6a61780768455de69077E07e89787839bf8166dEcfBf92B645209c0fB8"), "tether"), // USDT
+    (felt_hex!("0x068F5c6a61780768455de69077E07e89787839bf8166dEcfBf92B645209c0fB8"), "tether"),   // USDT
     (felt_hex!("0x03Fe2b97C1Fd336E750087D68B9b867997Fd64a2661fF3ca5A7C771641e8e7AC"), "wrapped-bitcoin"), // WBTC
-    (felt_hex!("0x0057912720381Af14B0E5C87aa4718ED5E527eaB60B3801ebF702AB09139E38b"), "wrapped-steth") // wstETH
+    (felt_hex!("0x0057912720381Af14B0E5C87aa4718ED5E527eaB60B3801ebF702AB09139E38b"), "wrapped-steth"), // wstETH
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,15 +66,13 @@ impl From<CoingeckoPriceClient> for PriceClient {
 #[serde(untagged)]
 enum CoingeckoResponse<T> {
     Success(T),
-    Error {
-        status: ErrorResponse
-    }
+    Error { status: ErrorResponse },
 }
 
 #[derive(Deserialize)]
 struct ErrorResponse {
     error_code: u64,
-    error_message: String
+    error_message: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,17 +148,11 @@ impl CoingeckoPriceClient {
             .append_pair("ids", token_id)
             .append_pair("vs_currencies", "usd");
 
-        let response: CoingeckoResponse<PriceResponse> = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let response: CoingeckoResponse<PriceResponse> = self.client.get(url).send().await?.json().await?;
 
         let prices = match response {
             CoingeckoResponse::Success(x) => x,
-            CoingeckoResponse::Error { status} => return Err(Error::Internal(status.error_message))
+            CoingeckoResponse::Error { status } => return Err(Error::Internal(status.error_message)),
         };
 
         let price = prices.0.get(token_id).cloned().ok_or(Error::InvalidPrice(*token))?;
@@ -186,7 +178,7 @@ mod tests {
 
             address_to_id: DEFAULT_COINGECKO_MAINNET_TOKENS
                 .into_iter()
-                .map(|(x,y)| (x, y.to_string()))
+                .map(|(x, y)| (x, y.to_string()))
                 .collect(),
 
             starknet: paymaster_starknet::Configuration {

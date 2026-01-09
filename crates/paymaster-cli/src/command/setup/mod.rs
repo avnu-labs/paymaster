@@ -3,8 +3,21 @@ use std::io::{self, Write};
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::command::forwarder::build::ForwarderDeployment;
+use crate::command::gas_tank::build::GasTankDeployment;
+use crate::command::relayer::build::RelayerDeployment;
+use crate::constants::{
+    DEFAULT_INITIAL_ESTIMATE_ACCOUNT_FUND_AMOUNT, DEFAULT_INITIAL_GAS_TANK_FUND_AMOUNT, DEFAULT_MAX_CHECK_STATUS_ATTEMPTS, DEFAULT_MAX_FEE_MULTIPLIER,
+    DEFAULT_MAX_PRICE_IMPACT, DEFAULT_MIN_RELAYER_BALANCE, DEFAULT_MIN_SWAP_SELL_AMOUNT, DEFAULT_PROVIDER_FEE_OVERHEAD, DEFAULT_REBALANCING_CHECK_INTERVAL,
+    DEFAULT_RELAYERS_LOCK_MODE, DEFAULT_RELAYERS_NUM, DEFAULT_RELAYERS_REBALANCE_TRIGGER_AMOUNT, DEFAULT_RPC_PORT, DEFAULT_SPONSORING_MODE, DEFAULT_STARKNET_TIMEOUT,
+    DEFAULT_SWAP_INTERVAL, DEFAULT_SWAP_SLIPPAGE, DEFAULT_VERBOSITY,
+};
+use crate::core::starknet::transaction::status::wait_for_transaction_success;
+use crate::core::Error;
+use crate::validation::{assert_rebalancing_configuration, assert_strk_balance};
 use clap::Args;
 use paymaster_common::service::Service;
+use paymaster_prices::coingecko::{DEFAULT_COINGECKO_MAINNET_TOKENS, DEFAULT_COINGECKO_PRICE_ENDPOINT, DEFAULT_COINGECKO_SEPOLIA_TOKENS};
 use paymaster_relayer::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration};
 use paymaster_relayer::swap::client::SwapClientConfiguration;
 use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
@@ -21,19 +34,6 @@ use starknet::accounts::ConnectedAccount;
 use starknet::core::types::{Call, Felt};
 use starknet::signers::SigningKey;
 use tracing::info;
-use paymaster_prices::coingecko::{DEFAULT_COINGECKO_MAINNET_TOKENS, DEFAULT_COINGECKO_PRICE_ENDPOINT, DEFAULT_COINGECKO_SEPOLIA_TOKENS};
-use crate::command::forwarder::build::ForwarderDeployment;
-use crate::command::gas_tank::build::GasTankDeployment;
-use crate::command::relayer::build::RelayerDeployment;
-use crate::constants::{
-    DEFAULT_INITIAL_ESTIMATE_ACCOUNT_FUND_AMOUNT, DEFAULT_INITIAL_GAS_TANK_FUND_AMOUNT, DEFAULT_MAX_CHECK_STATUS_ATTEMPTS, DEFAULT_MAX_FEE_MULTIPLIER,
-    DEFAULT_MAX_PRICE_IMPACT, DEFAULT_MIN_RELAYER_BALANCE, DEFAULT_MIN_SWAP_SELL_AMOUNT, DEFAULT_PROVIDER_FEE_OVERHEAD, DEFAULT_REBALANCING_CHECK_INTERVAL,
-    DEFAULT_RELAYERS_LOCK_MODE, DEFAULT_RELAYERS_NUM, DEFAULT_RELAYERS_REBALANCE_TRIGGER_AMOUNT, DEFAULT_RPC_PORT, DEFAULT_SPONSORING_MODE, DEFAULT_STARKNET_TIMEOUT,
-    DEFAULT_SWAP_INTERVAL, DEFAULT_SWAP_SLIPPAGE, DEFAULT_VERBOSITY,
-};
-use crate::core::starknet::transaction::status::wait_for_transaction_success;
-use crate::core::Error;
-use crate::validation::{assert_rebalancing_configuration, assert_strk_balance};
 
 #[derive(Args, Clone)]
 pub struct SetupParameters {
@@ -273,9 +273,9 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
                 ChainID::Sepolia => DEFAULT_COINGECKO_SEPOLIA_TOKENS.iter(),
                 ChainID::Mainnet => DEFAULT_COINGECKO_MAINNET_TOKENS.iter(),
             }
-                .cloned()
-                .map(|(x,y)| (x, y.to_string()))
-                .collect()
+            .cloned()
+            .map(|(x, y)| (x, y.to_string()))
+            .collect(),
         }),
         sponsoring: DEFAULT_SPONSORING_MODE,
     };
