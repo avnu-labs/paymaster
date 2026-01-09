@@ -14,8 +14,8 @@ use starknet::core::types::Felt;
 use crate::decimals::DecimalsResolver;
 use crate::{Error, PriceClient, PriceOracleConfiguration, TokenPrice};
 
-pub const DEFAULT_PRICE_SEPOLIA_ENDPOINT: &str = "https://sepolia.api.avnu.fi";
-pub const DEFAULT_PRICE_MAINNET_ENDPOINT: &str = "https://starknet.api.avnu.fi";
+pub const DEFAULT_AVNU_PRICE_SEPOLIA_ENDPOINT: &str = "https://sepolia.api.avnu.fi";
+pub const DEFAULT_AVNU_PRICE_MAINNET_ENDPOINT: &str = "https://starknet.api.avnu.fi";
 
 #[serde_as]
 #[derive(Deserialize, Clone, Copy, Debug)]
@@ -137,13 +137,14 @@ mod tests {
     use paymaster_starknet::{ChainID, DEFAULT_SEPOLIA_RPC_ENDPOINT};
     use starknet::core::types::Felt;
 
-    use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle, DEFAULT_PRICE_SEPOLIA_ENDPOINT};
+    use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 
+    #[ignore] // Require API key
     #[tokio::test]
     async fn should_return_tokens() {
         // Given
         let oracle = AVNUPriceOracle::new(&AVNUPriceClientConfiguration {
-            endpoint: DEFAULT_PRICE_SEPOLIA_ENDPOINT.to_string(),
+            endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
             api_key: None,
             starknet: paymaster_starknet::Configuration {
                 endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),

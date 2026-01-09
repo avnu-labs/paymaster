@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use clap::Args;
 use paymaster_common::service::Service;
-use paymaster_prices::avnu::{DEFAULT_PRICE_MAINNET_ENDPOINT, DEFAULT_PRICE_SEPOLIA_ENDPOINT};
 use paymaster_relayer::rebalancing::{OptionalRebalancingConfiguration, RebalancingConfiguration};
 use paymaster_relayer::swap::client::SwapClientConfiguration;
 use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
@@ -22,7 +21,7 @@ use starknet::accounts::ConnectedAccount;
 use starknet::core::types::{Call, Felt};
 use starknet::signers::SigningKey;
 use tracing::info;
-
+use paymaster_prices::coingecko::{DEFAULT_COINGECKO_MAINNET_TOKENS, DEFAULT_COINGECKO_PRICE_ENDPOINT, DEFAULT_COINGECKO_SEPOLIA_TOKENS};
 use crate::command::forwarder::build::ForwarderDeployment;
 use crate::command::gas_tank::build::GasTankDeployment;
 use crate::command::relayer::build::RelayerDeployment;
@@ -267,13 +266,16 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
                 },
             })),
         },
-        price: PriceConfiguration::Single(PriceOracleConfiguration::AVNU {
-            endpoint: match chain_id {
-                ChainID::Sepolia => DEFAULT_PRICE_SEPOLIA_ENDPOINT,
-                ChainID::Mainnet => DEFAULT_PRICE_MAINNET_ENDPOINT,
-            }
-            .to_string(),
+        price: PriceConfiguration::Single(PriceOracleConfiguration::Coingecko {
+            endpoint: DEFAULT_COINGECKO_PRICE_ENDPOINT.to_string(),
             api_key: None,
+            address_to_id: match chain_id {
+                ChainID::Sepolia => DEFAULT_COINGECKO_SEPOLIA_TOKENS.iter(),
+                ChainID::Mainnet => DEFAULT_COINGECKO_MAINNET_TOKENS.iter(),
+            }
+                .cloned()
+                .map(|(x,y)| (x, y.to_string()))
+                .collect()
         }),
         sponsoring: DEFAULT_SPONSORING_MODE,
     };
@@ -325,26 +327,23 @@ async fn perform_rebalancing(starknet: &Client, configuration: &ServiceConfigura
     let rebalancing_service = RelayerRebalancingService::new(relayer_context.clone()).await;
 
     // Perform initial rebalancing to distribute funds to relayers
-    match rebalancing_service.try_rebalance(initial_gas_tank_fund).await {
-        Ok(rebalancing_calls) => {
-            if !rebalancing_calls.is_empty() {
-                info!("➡️ Initial rebalancing prepared successfully");
+    if let Ok(rebalancing_calls) = rebalancing_service.try_rebalance(initial_gas_tank_fund).await {
+        if !rebalancing_calls.is_empty() {
+            info!("➡️ Initial rebalancing prepared successfully");
 
-                // Get gas tank account
-                let gas_tank_account = starknet.initialize_account(&StarknetAccountConfiguration {
-                    address: configuration.gas_tank.address,
-                    private_key: configuration.gas_tank.private_key,
-                });
+            // Get gas tank account
+            let gas_tank_account = starknet.initialize_account(&StarknetAccountConfiguration {
+                address: configuration.gas_tank.address,
+                private_key: configuration.gas_tank.private_key,
+            });
 
-                return Ok(rebalancing_calls.as_execute_from_outside_call(
-                    master_address,
-                    gas_tank_account,
-                    configuration.gas_tank.private_key,
-                    TimeBounds::valid_for(Duration::from_secs(3600)),
-                ));
-            }
-        },
-        Err(_) => {},
+            return Ok(rebalancing_calls.as_execute_from_outside_call(
+                master_address,
+                gas_tank_account,
+                configuration.gas_tank.private_key,
+                TimeBounds::valid_for(Duration::from_secs(3600)),
+            ));
+        }
     }
     Err(Error::Execution(
         "⚠️ Initial rebalancing failed. Relayers will be activated by the background service.".to_string(),

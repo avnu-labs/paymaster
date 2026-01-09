@@ -20,3 +20,6 @@ starknet = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
 tracing = { workspace = true, features = ['attributes'] }
+
+[dev-dependencies]
+paymaster-prices = { path = ".", features = ["testing"] }

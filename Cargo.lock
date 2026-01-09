@@ -2576,6 +2576,7 @@ dependencies = [
  "async-trait",
  "bigdecimal",
  "paymaster-common",
+ "paymaster-prices",
  "paymaster-starknet",
  "reqwest",
  "serde",
