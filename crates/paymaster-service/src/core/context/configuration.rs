@@ -132,7 +132,7 @@ pub enum PriceConfiguration {
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum PriceOracleConfiguration {
     #[serde(rename = "avnu")]
-    AVNU { endpoint: String, api_key: Option<String> },
+    AVNU { endpoint: String, api_key: String },
 
     #[serde(rename = "coingecko")]
     Coingecko {

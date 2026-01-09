@@ -27,7 +27,7 @@ struct Price {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AVNUPriceClientConfiguration {
     pub endpoint: String,
-    pub api_key: Option<String>,
+    pub api_key: String,
     pub starknet: StarknetConfiguration,
 }
 
@@ -55,9 +55,7 @@ impl From<AVNUPriceOracle> for PriceClient {
 impl AVNUPriceOracle {
     pub fn new(configuration: &AVNUPriceClientConfiguration) -> Self {
         let mut headers = HeaderMap::new();
-        if let Some(ref api_key) = configuration.api_key {
-            headers.insert("x-api-key", HeaderValue::from_str(api_key).expect("invalid api key"));
-        }
+        headers.insert("x-api-key", HeaderValue::from_str(&configuration.api_key).expect("invalid api key"));
 
         Self {
             endpoint: configuration.endpoint.clone(),
@@ -145,7 +143,7 @@ mod tests {
         // Given
         let oracle = AVNUPriceOracle::new(&AVNUPriceClientConfiguration {
             endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
-            api_key: None,
+            api_key: String::from("dummy-key"),
             starknet: paymaster_starknet::Configuration {
                 endpoint: DEFAULT_SEPOLIA_RPC_ENDPOINT.to_string(),
                 chain_id: ChainID::Sepolia,
