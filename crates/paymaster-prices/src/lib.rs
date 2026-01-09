@@ -56,6 +56,16 @@ pub struct PriceConfiguration {
     pub fallbacks: Vec<PriceOracleConfiguration>,
 }
 
+#[cfg(feature = "testing")]
+impl PriceConfiguration {
+    pub fn mock<T: mock::MockPriceOracle>() -> Self {
+        Self {
+            principal: PriceOracleConfiguration::mock::<T>(),
+            fallbacks: vec![],
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PriceOracleConfiguration {
     #[cfg(feature = "testing")]

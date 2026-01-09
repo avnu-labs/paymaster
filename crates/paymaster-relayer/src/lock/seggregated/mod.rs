@@ -135,7 +135,7 @@ mod tests {
     use crate::rebalancing::OptionalRebalancingConfiguration;
     use crate::{RelayerManagerConfiguration, RelayersConfiguration};
     use paymaster_prices::mock::MockPriceOracle;
-    use paymaster_prices::Configuration as PriceConfiguration;
+    use paymaster_prices::PriceConfiguration;
 
     #[derive(Debug)]
     pub struct MockPrice;

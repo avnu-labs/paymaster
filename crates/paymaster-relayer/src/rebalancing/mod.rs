@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use paymaster_common::concurrency::ConcurrentExecutor;
 use paymaster_common::service::{Error as ServiceError, Service};
 use paymaster_common::task;
-use paymaster_prices::Configuration as PriceConfiguration;
+use paymaster_prices::PriceConfiguration;
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::denormalize_felt;
 use paymaster_starknet::transaction::{Calls, TokenTransfer};
@@ -525,7 +525,7 @@ mod rebalancing_tests {
     use async_trait::async_trait;
     use paymaster_common::service::Service;
     use paymaster_prices::mock::MockPriceOracle;
-    use paymaster_prices::Configuration as PriceConfiguration;
+    use paymaster_prices::PriceConfiguration;
     use paymaster_starknet::constants::Token;
     use paymaster_starknet::math::normalize_felt;
     use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
@@ -1213,7 +1213,7 @@ mod integration_tests {
     use crate::swap::{SwapClientConfigurator, SwapConfiguration};
     use crate::{Context, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
     use paymaster_prices::mock::MockPriceOracle;
-    use paymaster_prices::Configuration as PriceConfiguration;
+    use paymaster_prices::PriceConfiguration;
 
     #[derive(Debug)]
     pub struct IntegrationMockPrice;

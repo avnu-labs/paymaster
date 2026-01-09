@@ -320,7 +320,7 @@ async fn perform_rebalancing(starknet: &Client, configuration: &ServiceConfigura
         gas_tank: configuration.gas_tank.clone(),
         relayers: configuration.relayers.clone(),
         supported_tokens: configuration.supported_tokens.clone(),
-        price: configuration.price.clone(),
+        price: configuration.clone().into(),
     };
 
     // Create a relayer context and rebalancing service
