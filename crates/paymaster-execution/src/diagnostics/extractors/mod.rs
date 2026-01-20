@@ -45,10 +45,4 @@ impl Metadata {
         self.0.insert(key.into(), value.into());
         self
     }
-    fn get_string_value(&self, key: &str) -> Option<String> {
-        match self.0.get(key) {
-            Some(DiagnosticValue::String(s)) => Some(s.clone()),
-            _ => None,
-        }
-    }
 }

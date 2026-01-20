@@ -5,37 +5,6 @@ use serde::Serialize;
 use starknet::core::types::Felt;
 use std::collections::HashMap;
 
-/// A metric to be emitted by the diagnostic service.
-///
-/// Extractors can define specific metrics relevant to their domain
-/// (e.g., slippage percentage for swap errors, amounts for balance errors).
-#[derive(Debug, Clone)]
-pub struct DiagnosticMetric {
-    /// Metric name (e.g., "avnu_slippage_percent", "avnu_sell_amount")
-    pub name: String,
-    /// Metric value
-    pub value: f64,
-    /// Additional labels for this metric (e.g., token symbol, error type)
-    pub labels: HashMap<String, String>,
-}
-
-impl DiagnosticMetric {
-    /// Creates a new diagnostic metric.
-    pub fn new(name: &str, value: f64) -> Self {
-        Self {
-            name: name.to_string(),
-            value,
-            labels: HashMap::new(),
-        }
-    }
-
-    /// Adds a label to the metric.
-    pub fn with_label(mut self, key: &str, value: impl Into<String>) -> Self {
-        self.labels.insert(key.to_string(), value.into());
-        self
-    }
-}
-
 /// The extracted diagnostic information from a failed transaction.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallDiagnostic {
@@ -51,11 +20,6 @@ pub struct CallDiagnostic {
 
     /// Original error message (for context)
     pub error_message: String,
-
-    /// Specific metrics to emit for this diagnostic.
-    /// These are emitted as OpenTelemetry histograms by the DiagnosticService.
-    #[serde(skip)]
-    pub metrics: Vec<DiagnosticMetric>,
 }
 
 /// A typed value for diagnostic metadata to ensure proper serialization.
@@ -116,4 +80,5 @@ use crate::diagnostics::DiagnosticContext;
 pub trait CallMetadataExtractor: Send + Sync {
     fn name(&self) -> String;
     async fn try_extract(&self, context: &DiagnosticContext) -> Option<CallDiagnostic>;
+    fn emit_metrics(&self, _diagnostic: &CallDiagnostic) {}
 }

@@ -4,10 +4,11 @@
 //! particularly focusing on slippage errors and swap parameters.
 
 use crate::diagnostics::extractors::Metadata;
-use crate::diagnostics::{CallDiagnostic, CallMetadataExtractor, DiagnosticContext, DiagnosticMetric, DiagnosticValue};
+use crate::diagnostics::{CallDiagnostic, CallMetadataExtractor, DiagnosticContext, DiagnosticValue};
 use crate::tokens::TokenClient;
 use crate::Error;
 use async_trait::async_trait;
+use paymaster_common::metric;
 use paymaster_starknet::math::felt_to_u128;
 use serde::Serialize;
 use starknet::core::types::{Call, Felt};
@@ -348,44 +349,6 @@ impl AvnuExtractor {
         metadata.insert("function", function_name);
         Ok(metadata)
     }
-
-    /// Builds AVNU-specific metrics from extracted metadata.
-    ///
-    /// Emits:
-    /// - `avnu_slippage_percent`: Max slippage percentage for slippage errors
-    /// - `avnu_sell_amount`: Normalized sell amount for swap errors
-    /// - `avnu_buy_amount`: Normalized buy amount for swap errors
-    fn build_metrics(&self, metadata: &Metadata, category: &ErrorCategory) -> Vec<DiagnosticMetric> {
-        let mut metrics = Vec::new();
-
-        // Get token symbols for labels (if available)
-        let sell_token_symbol = metadata.get_string_value("sell_token_symbol");
-        let buy_token_symbol = metadata.get_string_value("buy_token_symbol");
-
-        // Slippage metric - useful for understanding slippage distribution in errors
-        if let Some(DiagnosticValue::Float(slippage)) = metadata.0.get("max_slippage_percent") {
-            let mut metric = DiagnosticMetric::new("avnu_slippage_percent", *slippage);
-            if let Some(symbol) = sell_token_symbol.clone() {
-                metric = metric.with_label("sell_token", symbol.clone());
-            }
-            if let Some(symbol) = buy_token_symbol {
-                metric = metric.with_label("buy_token", symbol.clone());
-            }
-            metrics.push(metric);
-        }
-
-        // Sell amount metric - useful for understanding which amounts fail
-        if let Some(DiagnosticValue::Float(amount)) = metadata.0.get("sell_amount") {
-            let mut metric = DiagnosticMetric::new("avnu_sell_amount", *amount);
-            if let Some(symbol) = sell_token_symbol {
-                metric = metric.with_label("token", symbol.clone());
-            }
-            metric = metric.with_label("error_type", category.as_str());
-            metrics.push(metric);
-        }
-
-        metrics
-    }
 }
 
 #[async_trait]
@@ -419,16 +382,41 @@ impl CallMetadataExtractor for AvnuExtractor {
         // Add contract address for reference
         metadata.insert("contract_address", self.contract_address);
 
-        // Build extractor-specific metrics
-        let metrics = self.build_metrics(&metadata, &category);
-
         Some(CallDiagnostic {
             contract_name: "avnu".to_string(),
             error_category: category.as_str().to_string(),
             metadata: metadata.0,
             error_message: context.error_message.to_string(),
-            metrics,
         })
+    }
+
+    fn emit_metrics(&self, diagnostic: &CallDiagnostic) {
+        // Skip if not an AVNU diagnostic
+        if diagnostic.contract_name != "avnu" {
+            return;
+        }
+
+        // Emit slippage metric
+        if let Some(DiagnosticValue::Float(slippage)) = diagnostic.metadata.get("max_slippage_percent") {
+            let sell_token = match diagnostic.metadata.get("sell_token_symbol") {
+                Some(DiagnosticValue::String(s)) => s.as_str(),
+                _ => "unknown",
+            };
+            let buy_token = match diagnostic.metadata.get("buy_token_symbol") {
+                Some(DiagnosticValue::String(s)) => s.as_str(),
+                _ => "unknown",
+            };
+            metric!(histogram[avnu_slippage_percent] = *slippage, sell_token = sell_token, buy_token = buy_token);
+        }
+
+        // Emit sell amount metric
+        if let Some(DiagnosticValue::Float(amount)) = diagnostic.metadata.get("sell_amount") {
+            let token = match diagnostic.metadata.get("sell_token_symbol") {
+                Some(DiagnosticValue::String(s)) => s.as_str(),
+                _ => "unknown",
+            };
+            metric!(histogram[avnu_sell_amount] = *amount, token = token, error_type = diagnostic.error_category.as_str());
+        }
     }
 }
 

@@ -4,7 +4,6 @@ use super::context::DiagnosticContext;
 use super::extractor::{CallDiagnostic, CallMetadataExtractor};
 use super::extractors::{AvnuExtractor, AVNU_EXCHANGE_ADDRESS_MAINNET, AVNU_EXCHANGE_ADDRESS_SEPOLIA};
 use crate::tokens::TokenClient;
-use opentelemetry::{global, KeyValue};
 use paymaster_common::metric;
 use paymaster_starknet::transaction::Calls;
 use paymaster_starknet::ChainID;
@@ -85,19 +84,16 @@ impl DiagnosticClient {
 
     /// Emits OpenTelemetry metrics for a diagnostic.
     fn emit_metrics(&self, diagnostic: &CallDiagnostic) {
-        // Emit main counter with category and contract labels
+        // Emit main counter with category and contract labels (generic)
         metric!(
             counter[diagnostic_error] = 1,
             category = diagnostic.error_category.as_str(),
             contract = diagnostic.contract_name
         );
 
-        // Emit extractor-specific histogram metrics
-        let meter = global::meter("tracing");
-        for m in &diagnostic.metrics {
-            let histogram = meter.f64_histogram(m.name.clone()).build();
-            let attributes: Vec<KeyValue> = m.labels.iter().map(|(k, v)| KeyValue::new(k.clone(), v.clone())).collect();
-            histogram.record(m.value, &attributes);
+        // Delegate extractor-specific metrics to the extractors
+        for extractor in &self.extractors {
+            extractor.emit_metrics(diagnostic);
         }
     }
 

@@ -39,4 +39,4 @@ pub mod extractors;
 
 pub use client::DiagnosticClient;
 pub use context::DiagnosticContext;
-pub use extractor::{CallDiagnostic, CallMetadataExtractor, DiagnosticMetric, DiagnosticValue};
+pub use extractor::{CallDiagnostic, CallMetadataExtractor, DiagnosticValue};
