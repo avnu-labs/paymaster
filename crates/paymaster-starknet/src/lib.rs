@@ -287,7 +287,22 @@ impl Client {
         Ok(result?)
     }
 
-    /// Returns the receipt of the transaction with `hash`
+    /// Returns the class hash of the contract deployed at the given address
+    #[instrument(name = "fetch_class_hash_at", skip(self))]
+    pub async fn fetch_class_hash_at(&self, contract_address: Felt) -> Result<Felt, Error> {
+        let (result, duration) = measure_duration!(log_if_error!(
+            self.inner
+                .get_class_hash_at(BlockId::Tag(BlockTag::Latest), contract_address)
+                .await
+        ));
+
+        metric!(histogram[starknet_rpc] = duration.as_millis(), method = "get_class_hash_at");
+        metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "get_class_hash_at");
+
+        Ok(result?)
+    }
+
+    /// Returns the contract class for the given class hash
     #[instrument(name = "fetch_class", skip(self))]
     pub async fn fetch_class(&self, class_hash: Felt) -> Result<ContractClass, Error> {
         let (result, duration) = measure_duration!(log_if_error!(self.inner.get_class(BlockId::Tag(BlockTag::Latest), class_hash).await));

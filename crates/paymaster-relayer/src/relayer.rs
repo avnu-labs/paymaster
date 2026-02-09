@@ -41,7 +41,7 @@ impl Deref for Relayer {
 impl Relayer {
     pub fn new(starknet: &Client, balances: ExpirableCache<Felt, Felt>, configuration: &RelayerConfiguration) -> Self {
         let mut account = starknet.initialize_account(&configuration.account);
-        account.set_block_id(BlockId::Tag(BlockTag::PreConfirmed));
+        account.set_block_id(BlockId::Tag(BlockTag::Latest));
 
         Self {
             account,

@@ -60,26 +60,42 @@ impl Client {
     /// Resolve the paymaster version associated to the [`user`] account. This function relies on a
     /// cache whose entries expires every 5 minutes so subsequent calls for the same user are resolved
     /// without any external calls.
+    ///
+    /// Detection strategy:
+    /// 1. Try SRC-5 `supports_interface` for SNIP-9 V1/V2 interface IDs
+    /// 2. If SRC-5 finds nothing (returns None), fall back to ABI inspection of the account's class
+    /// 3. If SRC-5 call itself errors, use cached value or fall back to ABI inspection
     pub async fn resolve_paymaster_version_from_account(&self, user: ContractAddress) -> Result<PaymasterVersion, Error> {
         if let Some(value) = self.cache_account_version.get_if_not_stale(&user) {
             return Ok(value);
         }
 
-        match PaymasterVersion::fetch_supported_version(self, user).await {
-            Ok(supported_version) => {
-                let version = supported_version.maximum_version().ok_or(Error::InvalidVersion)?;
-                self.cache_account_version.insert(user, version, Duration::from_secs(5 * 60));
-                Ok(version)
+        let version = match PaymasterVersion::fetch_supported_version(self, user).await {
+            Ok(supported_version) => match supported_version.maximum_version() {
+                Some(v) => v,
+                None => {
+                    // SRC-5 didn't find SNIP-9 interfaces, fall back to ABI inspection
+                    warn!("SRC-5 detection found no SNIP-9 support for {}, trying ABI fallback", user.to_fixed_hex_string());
+                    self.resolve_version_from_account_class(user).await?
+                },
             },
             Err(e) => {
-                if let Some(version) = self.cache_account_version.get_if_not_expired(&user) {
-                    Ok(version)
-                } else {
-                    warn!("Failed to resolve paymaster version for account {}: {}", user.to_fixed_hex_string(), e);
-                    Err(Error::InvalidVersion)
+                if let Some(v) = self.cache_account_version.get_if_not_expired(&user) {
+                    return Ok(v);
                 }
+                warn!("SRC-5 detection failed for {}: {}, trying ABI fallback", user.to_fixed_hex_string(), e);
+                self.resolve_version_from_account_class(user).await?
             },
-        }
+        };
+
+        self.cache_account_version.insert(user, version, Duration::from_secs(5 * 60));
+        Ok(version)
+    }
+
+    /// Fall back to ABI-based version detection by fetching the account's class hash and inspecting its ABI
+    async fn resolve_version_from_account_class(&self, user: ContractAddress) -> Result<PaymasterVersion, Error> {
+        let class_hash = self.inner.fetch_class_hash_at(user).await?;
+        self.resolve_paymaster_version_from_class(class_hash).await
     }
 
     /// Resolve the paymaster version associated to the [`class_hash`]. This function relies on a
