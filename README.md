@@ -27,6 +27,31 @@ Empower your application with a SNIP‑29 compliant Paymaster.
 
 ## 📦 Installation
 
+### asdf (Recommended)
+
+Install using [asdf](https://asdf-vm.com/) version manager:
+
+```bash
+# Add the plugin
+asdf plugin add paymaster https://github.com/avnu-labs/paymaster.git
+
+# Install a version
+asdf install paymaster latest
+
+# Set it globally (or use .tool-versions file)
+asdf set paymaster latest
+
+# Both binaries are now available
+paymaster-cli --help
+paymaster-service
+```
+
+### GitHub Releases
+
+Download pre-built binaries from [GitHub Releases](https://github.com/avnu-labs/paymaster/releases).
+
+Available for: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64).
+
 ### Rust Binary
 
 ```bash
@@ -131,3 +156,4 @@ Made with ❤️ by [AVNU](https://x.com/avnu_fi)
 This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
 
 Use at your own risk.
+

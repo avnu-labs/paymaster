@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+resolve_version() {
+  local version="$1"
+  local list_all
+
+  version="$(printf "%s\n" "$version" | awk 'NF {last=$0} END {print last}')"
+  version="$(printf "%s" "$version" | tr -d '\r')"
+
+  if [[ "$version" == "latest" ]]; then
+    list_all="$(dirname "${BASH_SOURCE[0]}")/list-all"
+    if [[ ! -x "$list_all" ]]; then
+      echo "Error: list-all not found; cannot resolve latest" >&2
+      exit 1
+    fi
+    version="$("$list_all" | awk 'NF {last=$0} END {print last}')"
+  fi
+
+  if [[ -z "$version" ]]; then
+    echo "Error: Could not resolve version" >&2
+    exit 1
+  fi
+
+  printf "%s" "$version"
+}
+
+get_platform() {
+  local os arch
+
+  os="$(uname -s)"
+  arch="$(uname -m)"
+
+  case "$os" in
+    Linux*)
+      case "$arch" in
+        x86_64)  echo "x86_64-unknown-linux-gnu" ;;
+        aarch64) echo "aarch64-unknown-linux-gnu" ;;
+        arm64)   echo "aarch64-unknown-linux-gnu" ;;
+        *)       echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+      esac
+      ;;
+    Darwin*)
+      case "$arch" in
+        x86_64)  echo "x86_64-apple-darwin" ;;
+        aarch64) echo "aarch64-apple-darwin" ;;
+        arm64)   echo "aarch64-apple-darwin" ;;
+        *)       echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+      esac
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      case "$arch" in
+        x86_64) echo "x86_64-pc-windows-msvc" ;;
+        *)      echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+      esac
+      ;;
+    *)
+      echo "Unsupported OS: $os" >&2
+      exit 1
+      ;;
+  esac
+}
+
+get_extension() {
+  local os
+  os="$(uname -s)"
+
+  case "$os" in
+    MINGW*|MSYS*|CYGWIN*) echo "zip" ;;
+    *) echo "tar.gz" ;;
+  esac
+}
+
+download_binary() {
+  local binary_name="$1"
+  local version="$2"
+  local platform="$3"
+  local extension="$4"
+  local download_path="$5"
+
+  local url="https://github.com/avnu-labs/paymaster/releases/download/v${version}/${binary_name}-v${version}-${platform}.${extension}"
+
+  echo "Downloading ${binary_name} from ${url}..."
+  curl -fsSL "$url" -o "${download_path}/${binary_name}.${extension}"
+}
+
+main() {
+  local version="${ASDF_INSTALL_VERSION}"
+  local download_path="${ASDF_DOWNLOAD_PATH}"
+  local platform extension
+
+  version="$(resolve_version "$version")"
+  platform="$(get_platform)"
+  extension="$(get_extension)"
+
+  mkdir -p "$download_path"
+
+  # Download both binaries
+  download_binary "paymaster-cli" "$version" "$platform" "$extension" "$download_path"
+  download_binary "paymaster-service" "$version" "$platform" "$extension" "$download_path"
+
+  # Download checksums for verification
+  local checksums_url="https://github.com/avnu-labs/paymaster/releases/download/v${version}/checksums.txt"
+  echo "Downloading checksums..."
+  curl -fsSL "$checksums_url" -o "${download_path}/checksums.txt" || echo "Warning: Could not download checksums"
+}
+
+main

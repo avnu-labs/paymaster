@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+list_all="$(dirname "${BASH_SOURCE[0]}")/list-all"
+
+if [[ ! -x "$list_all" ]]; then
+  echo "Error: list-all not found; cannot resolve latest" >&2
+  exit 1
+fi
+
+"$list_all" | awk 'NF {last=$0} END {print last}'

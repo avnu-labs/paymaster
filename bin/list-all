@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Fetch all release tags from GitHub
+releases=$(curl -s "https://api.github.com/repos/avnu-labs/paymaster/releases" | \
+  grep '"tag_name":' | \
+  sed -E 's/.*"v([^"]+)".*/\1/' | \
+  sort -V)
+
+echo "$releases"

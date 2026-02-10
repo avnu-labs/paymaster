@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+get_extension() {
+  local os
+  os="$(uname -s)"
+
+  case "$os" in
+    MINGW*|MSYS*|CYGWIN*) echo "zip" ;;
+    *) echo "tar.gz" ;;
+  esac
+}
+
+extract_binary() {
+  local binary_name="$1"
+  local download_path="$2"
+  local install_path="$3"
+  local extension="$4"
+
+  local archive="${download_path}/${binary_name}.${extension}"
+
+  if [[ ! -f "$archive" ]]; then
+    echo "Error: Archive not found: $archive" >&2
+    exit 1
+  fi
+
+  echo "Extracting ${binary_name}..."
+
+  case "$extension" in
+    tar.gz)
+      tar -xzf "$archive" -C "$install_path"
+      ;;
+    zip)
+      unzip -q "$archive" -d "$install_path"
+      ;;
+  esac
+}
+
+main() {
+  local install_type="${ASDF_INSTALL_TYPE}"
+  local version="${ASDF_INSTALL_VERSION}"
+  local install_path="${ASDF_INSTALL_PATH}"
+  local download_path="${ASDF_DOWNLOAD_PATH}"
+  local extension
+
+  if [[ "$install_type" != "version" ]]; then
+    echo "Error: asdf-paymaster only supports version installs" >&2
+    exit 1
+  fi
+
+  extension="$(get_extension)"
+
+  mkdir -p "${install_path}/bin"
+
+  # Extract both binaries
+  extract_binary "paymaster-cli" "$download_path" "${install_path}/bin" "$extension"
+  extract_binary "paymaster-service" "$download_path" "${install_path}/bin" "$extension"
+
+  # Make binaries executable
+  chmod +x "${install_path}/bin/paymaster-cli"* 2>/dev/null || true
+  chmod +x "${install_path}/bin/paymaster-service"* 2>/dev/null || true
+
+  echo "paymaster ${version} installed successfully!"
+}
+
+main
