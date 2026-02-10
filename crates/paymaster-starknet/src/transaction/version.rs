@@ -93,7 +93,9 @@ impl PaymasterVersion {
 
         match response {
             Ok(value) => Ok(value.first() == Some(&Felt::ONE)),
-            Err(e) => Err(Error::Starknet(e.to_string())),
+            // Accounts that don't implement supports_interface should not cause errors —
+            // treat as "not supported" and let the ABI fallback handle detection
+            Err(_) => Ok(false),
         }
     }
 }
