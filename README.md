@@ -116,6 +116,63 @@ const { transaction_hash } = result;
 
 🔗 [Full Integration Guide available here](https://docs.out-of-gas.xyz/docs/dapp-integration)
 
+### Rust Client
+
+Add the dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+paymaster-client = { git = "https://github.com/avnu-labs/paymaster" }
+```
+
+```rust
+use paymaster_client::{PaymasterClient, STRK_TOKEN};
+
+#[tokio::main]
+async fn main() -> Result<(), paymaster_client::Error> {
+    let client = PaymasterClient::builder("https://sepolia.paymaster.avnu.fi")
+        .api_key("YOUR_API_KEY")
+        .build()?;
+
+    // Sponsored transaction (gas paid by the paymaster)
+    let resp = client
+        .transaction()
+        .call(your_call())
+        .address(your_account_address)
+        .sponsored()
+        .send(&your_wallet)
+        .await?;
+
+    println!("tx hash: {:#x}", resp.transaction_hash);
+
+    // Non-sponsored transaction (gas defaults to STRK)
+    let resp = client
+        .transaction()
+        .call(your_call())
+        .address(your_account_address)
+        .send(&your_wallet)
+        .await?;
+
+    println!("tx hash: {:#x}", resp.transaction_hash);
+
+    // Two-step flow: inspect fees before signing
+    let prepared = client
+        .transaction()
+        .call(your_call())
+        .address(your_account_address)
+        .gas_token(STRK_TOKEN)
+        .build()
+        .await?;
+
+    println!("Estimated fee: {:#x}", prepared.fee.estimated_fee_in_strk);
+    let resp = prepared.send(&your_wallet).await?;
+
+    println!("tx hash: {:#x}", resp.transaction_hash);
+
+    Ok(())
+}
+```
+
 ## 📖 Documentation
 
 📚 [Full documentation available here](https://docs.out-of-gas.xyz)

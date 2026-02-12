@@ -2523,6 +2523,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "paymaster-client"
+version = "1.0.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "starknet",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
 name = "paymaster-common"
 version = "1.0.0"
 dependencies = [
@@ -3690,7 +3705,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "starknet"
 version = "0.17.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "starknet-accounts",
  "starknet-contract",
@@ -3705,7 +3720,7 @@ dependencies = [
 [[package]]
 name = "starknet-accounts"
 version = "0.16.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -3719,7 +3734,7 @@ dependencies = [
 [[package]]
 name = "starknet-contract"
 version = "0.16.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "serde",
  "serde_json",
@@ -3733,7 +3748,7 @@ dependencies = [
 [[package]]
 name = "starknet-core"
 version = "0.16.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "base64 0.21.7",
  "crypto-bigint",
@@ -3755,7 +3770,7 @@ dependencies = [
 [[package]]
 name = "starknet-core-derive"
 version = "0.1.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3765,7 +3780,7 @@ dependencies = [
 [[package]]
 name = "starknet-crypto"
 version = "0.8.1"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "crypto-bigint",
  "hex",
@@ -3783,7 +3798,7 @@ dependencies = [
 [[package]]
 name = "starknet-curve"
 version = "0.6.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "starknet-types-core",
 ]
@@ -3791,7 +3806,7 @@ dependencies = [
 [[package]]
 name = "starknet-macros"
 version = "0.2.5"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "starknet-core",
  "syn",
@@ -3800,7 +3815,7 @@ dependencies = [
 [[package]]
 name = "starknet-providers"
 version = "0.16.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -3820,7 +3835,7 @@ dependencies = [
 [[package]]
 name = "starknet-signers"
 version = "0.14.0"
-source = "git+https://github.com/xJonathanLEI/starknet-rs?tag=starknet%2Fv0.17.0#85906137d634c86b07de20fa33071e5cf186ce21"
+source = "git+https://github.com/florian-bellotti/starknet-rs?branch=bugfix%2Ftyped-data#e3e9fcac80347bd1d2194cf57b48ca164dc6c20d"
 dependencies = [
  "async-trait",
  "auto_impl",
