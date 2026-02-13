@@ -1,10 +1,8 @@
-mod client;
 mod error;
 mod transaction;
-mod transport;
 pub mod types;
 
-pub use client::{PaymasterClient, PaymasterClientBuilder};
 pub use error::Error;
+pub use paymaster_rpc::client::{Client as PaymasterClient, ClientBuilder as PaymasterClientBuilder};
 pub use transaction::{PreparedTransaction, TransactionBuilder, STRK_TOKEN};
 pub use types::*;

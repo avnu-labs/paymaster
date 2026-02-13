@@ -2526,10 +2526,9 @@ dependencies = [
 name = "paymaster-client"
 version = "1.0.0"
 dependencies = [
- "reqwest",
+ "paymaster-rpc",
  "serde",
  "serde_json",
- "serde_with",
  "starknet",
  "thiserror 2.0.12",
  "tokio",

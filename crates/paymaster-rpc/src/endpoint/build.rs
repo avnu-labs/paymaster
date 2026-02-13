@@ -12,7 +12,7 @@ use crate::endpoint::validation::{check_is_allowed_fee_mode, check_is_supported_
 use crate::endpoint::RequestContext;
 use crate::Error;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BuildTransactionRequest {
     pub transaction: TransactionParameters,
     pub parameters: ExecutionParameters,
@@ -64,7 +64,7 @@ impl From<InvokeParameters> for paymaster_execution::InvokeParameters {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BuildTransactionResponse {
     Deploy(DeployTransaction),
@@ -72,7 +72,7 @@ pub enum BuildTransactionResponse {
     DeployAndInvoke(DeployAndInvokeTransaction),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeployTransaction {
     pub deployment: DeploymentParameters,
     pub parameters: ExecutionParameters,
@@ -85,7 +85,7 @@ impl From<DeployTransaction> for BuildTransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InvokeTransaction {
     pub typed_data: TypedData,
     pub parameters: ExecutionParameters,
@@ -98,7 +98,7 @@ impl From<InvokeTransaction> for BuildTransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeployAndInvokeTransaction {
     pub deployment: DeploymentParameters,
     pub typed_data: TypedData,

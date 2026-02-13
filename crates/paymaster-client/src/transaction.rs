@@ -1,7 +1,7 @@
+use paymaster_rpc::client::Client;
 use starknet::core::types::{Call, Felt, TypedData};
 use starknet::signers::Signer;
 
-use crate::client::PaymasterClient;
 use crate::types::*;
 use crate::Error;
 
@@ -18,7 +18,7 @@ pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cd
 /// let wallet = LocalWallet::from_signing_key(SigningKey::from_secret_scalar(private_key));
 ///
 /// // One-step flow
-/// let result = client.transaction()
+/// let result = TransactionBuilder::new(&client)
 ///     .call(transfer_call)
 ///     .address(account_address)
 ///     .sponsored()
@@ -26,7 +26,7 @@ pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cd
 ///     .await?;
 ///
 /// // Two-step flow with fee inspection
-/// let prepared = client.transaction()
+/// let prepared = TransactionBuilder::new(&client)
 ///     .call(transfer_call)
 ///     .address(account_address)
 ///     .build()
@@ -36,7 +36,7 @@ pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cd
 /// let result = prepared.send(&wallet).await?;
 /// ```
 pub struct TransactionBuilder<'a> {
-    client: &'a PaymasterClient,
+    client: &'a Client,
     calls: Option<Vec<Call>>,
     address: Option<Felt>,
     deployment: Option<DeploymentParameters>,
@@ -47,7 +47,7 @@ pub struct TransactionBuilder<'a> {
 }
 
 impl<'a> TransactionBuilder<'a> {
-    pub(crate) fn new(client: &'a PaymasterClient) -> Self {
+    pub fn new(client: &'a Client) -> Self {
         Self {
             client,
             calls: None,
@@ -184,7 +184,7 @@ impl<'a> TransactionBuilder<'a> {
 ///
 /// Contains the fee estimate from the build step, allowing inspection before signing.
 pub struct PreparedTransaction<'a> {
-    client: &'a PaymasterClient,
+    client: &'a Client,
     build_response: BuildTransactionResponse,
     address: Felt,
     parameters: ExecutionParameters,
@@ -230,7 +230,7 @@ impl<'a> PreparedTransaction<'a> {
             parameters: self.parameters,
         };
 
-        self.client.execute_transaction(exec_req).await
+        Ok(self.client.execute_transaction(exec_req).await?)
     }
 }
 
@@ -252,9 +252,25 @@ where
 mod tests {
     use starknet::signers::{LocalWallet, SigningKey};
     use wiremock::matchers::{body_partial_json, method};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
     use super::*;
+
+    type PaymasterClient = paymaster_rpc::client::Client;
+
+    struct JsonRpcOk(serde_json::Value);
+
+    impl Respond for JsonRpcOk {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            let id = body.get("id").cloned().unwrap_or(serde_json::json!(0));
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": self.0,
+                "id": id
+            }))
+        }
+    }
 
     fn test_wallet() -> LocalWallet {
         LocalWallet::from_signing_key(SigningKey::from_secret_scalar(Felt::from_hex_unchecked("0x5678")))
@@ -299,81 +315,69 @@ mod tests {
         })
     }
 
-    fn invoke_build_response() -> serde_json::Value {
+    fn invoke_build_result() -> serde_json::Value {
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "type": "invoke",
-                "typed_data": typed_data_json(),
-                "parameters": {
-                    "version": "0x1",
-                    "fee_mode": {"mode": "sponsored", "tip": "normal"},
-                    "time_bounds": null
-                },
-                "fee": {
-                    "gas_token_price_in_strk": "0x1",
-                    "estimated_fee_in_strk": "0x100",
-                    "estimated_fee_in_gas_token": "0x100",
-                    "suggested_max_fee_in_strk": "0x200",
-                    "suggested_max_fee_in_gas_token": "0x200"
-                }
+            "type": "invoke",
+            "typed_data": typed_data_json(),
+            "parameters": {
+                "version": "0x1",
+                "fee_mode": {"mode": "sponsored", "tip": "normal"},
+                "time_bounds": null
             },
-            "id": 1
+            "fee": {
+                "gas_token_price_in_strk": "0x1",
+                "estimated_fee_in_strk": "0x100",
+                "estimated_fee_in_gas_token": "0x100",
+                "suggested_max_fee_in_strk": "0x200",
+                "suggested_max_fee_in_gas_token": "0x200"
+            }
         })
     }
 
-    fn deploy_build_response() -> serde_json::Value {
+    fn deploy_build_result() -> serde_json::Value {
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "type": "deploy",
-                "deployment": {
-                    "address": "0x1",
-                    "class_hash": "0x2",
-                    "salt": "0x3",
-                    "calldata": [],
-                    "sigdata": null,
-                    "version": 1
-                },
-                "parameters": {
-                    "version": "0x1",
-                    "fee_mode": {"mode": "sponsored", "tip": "normal"},
-                    "time_bounds": null
-                },
-                "fee": {
-                    "gas_token_price_in_strk": "0x1",
-                    "estimated_fee_in_strk": "0x50",
-                    "estimated_fee_in_gas_token": "0x50",
-                    "suggested_max_fee_in_strk": "0xa0",
-                    "suggested_max_fee_in_gas_token": "0xa0"
-                }
+            "type": "deploy",
+            "deployment": {
+                "address": "0x1",
+                "class_hash": "0x2",
+                "salt": "0x3",
+                "calldata": [],
+                "sigdata": null,
+                "version": 1
             },
-            "id": 1
+            "parameters": {
+                "version": "0x1",
+                "fee_mode": {"mode": "sponsored", "tip": "normal"},
+                "time_bounds": null
+            },
+            "fee": {
+                "gas_token_price_in_strk": "0x1",
+                "estimated_fee_in_strk": "0x50",
+                "estimated_fee_in_gas_token": "0x50",
+                "suggested_max_fee_in_strk": "0xa0",
+                "suggested_max_fee_in_gas_token": "0xa0"
+            }
         })
     }
 
-    fn execute_response() -> serde_json::Value {
+    fn execute_result() -> serde_json::Value {
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "transaction_hash": "0xdeadbeef",
-                "tracking_id": "0x0"
-            },
-            "id": 2
+            "transaction_hash": "0xdeadbeef",
+            "tracking_id": "0x0"
         })
     }
 
     #[tokio::test]
     async fn should_error_without_address() {
-        let client = PaymasterClient::new("http://localhost:1234").unwrap();
-        let result = client.transaction().calls(vec![]).send(&test_wallet()).await;
+        let client = PaymasterClient::new("http://localhost:1234");
+        let result = TransactionBuilder::new(&client).calls(vec![]).send(&test_wallet()).await;
         assert!(matches!(result, Err(Error::Configuration(_))));
     }
 
     #[tokio::test]
     async fn should_error_without_calls_or_deployment() {
-        let client = PaymasterClient::new("http://localhost:1234").unwrap();
-        let result = client.transaction().address(Felt::ONE).send(&test_wallet()).await;
+        let client = PaymasterClient::new("http://localhost:1234");
+        let result = TransactionBuilder::new(&client).address(Felt::ONE).send(&test_wallet()).await;
         assert!(matches!(result, Err(Error::Configuration(_))));
     }
 
@@ -392,21 +396,20 @@ mod tests {
                     }
                 }]
             })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(invoke_build_response()))
+            .respond_with(JsonRpcOk(invoke_build_result()))
             .expect(1)
             .mount(&server)
             .await;
 
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_executeTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(execute_response()))
+            .respond_with(JsonRpcOk(execute_result()))
             .expect(1)
             .mount(&server)
             .await;
 
-        let client = PaymasterClient::new(server.uri()).unwrap();
-        client
-            .transaction()
+        let client = PaymasterClient::new(&server.uri());
+        TransactionBuilder::new(&client)
             .calls(vec![])
             .address(Felt::from_hex_unchecked("0x1234"))
             .send(&test_wallet())
@@ -416,9 +419,8 @@ mod tests {
 
     #[tokio::test]
     async fn should_reject_deploy_only_when_not_sponsored() {
-        let client = PaymasterClient::new("http://localhost:1234").unwrap();
-        let result = client
-            .transaction()
+        let client = PaymasterClient::new("http://localhost:1234");
+        let result = TransactionBuilder::new(&client)
             .deployment(DeploymentParameters {
                 address: Felt::ONE,
                 class_hash: Felt::TWO,
@@ -438,21 +440,20 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_buildTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(deploy_build_response()))
+            .respond_with(JsonRpcOk(deploy_build_result()))
             .expect(1)
             .mount(&server)
             .await;
 
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_executeTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(execute_response()))
+            .respond_with(JsonRpcOk(execute_result()))
             .expect(1)
             .mount(&server)
             .await;
 
-        let client = PaymasterClient::new(server.uri()).unwrap();
-        let result = client
-            .transaction()
+        let client = PaymasterClient::new(&server.uri());
+        let result = TransactionBuilder::new(&client)
             .deployment(DeploymentParameters {
                 address: Felt::ONE,
                 class_hash: Felt::TWO,
@@ -475,14 +476,13 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_buildTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(invoke_build_response()))
+            .respond_with(JsonRpcOk(invoke_build_result()))
             .expect(1)
             .mount(&server)
             .await;
 
-        let client = PaymasterClient::new(server.uri()).unwrap();
-        let prepared = client
-            .transaction()
+        let client = PaymasterClient::new(&server.uri());
+        let prepared = TransactionBuilder::new(&client)
             .calls(vec![])
             .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()
@@ -499,21 +499,20 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_buildTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(invoke_build_response()))
+            .respond_with(JsonRpcOk(invoke_build_result()))
             .expect(1)
             .mount(&server)
             .await;
 
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_executeTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(execute_response()))
+            .respond_with(JsonRpcOk(execute_result()))
             .expect(1)
             .mount(&server)
             .await;
 
-        let client = PaymasterClient::new(server.uri()).unwrap();
-        let prepared = client
-            .transaction()
+        let client = PaymasterClient::new(&server.uri());
+        let prepared = TransactionBuilder::new(&client)
             .calls(vec![])
             .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()
@@ -530,22 +529,21 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_buildTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(invoke_build_response()))
+            .respond_with(JsonRpcOk(invoke_build_result()))
             .expect(1)
             .mount(&server)
             .await;
 
         Mock::given(method("POST"))
             .and(body_partial_json(serde_json::json!({"method": "paymaster_executeTransaction"})))
-            .respond_with(ResponseTemplate::new(200).set_body_json(execute_response()))
+            .respond_with(JsonRpcOk(execute_result()))
             .expect(1)
             .mount(&server)
             .await;
 
         let wallet = LocalWallet::from_signing_key(SigningKey::from_secret_scalar(Felt::from_hex_unchecked("0x5678")));
-        let client = PaymasterClient::new(server.uri()).unwrap();
-        let result = client
-            .transaction()
+        let client = PaymasterClient::new(&server.uri());
+        let result = TransactionBuilder::new(&client)
             .calls(vec![])
             .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()

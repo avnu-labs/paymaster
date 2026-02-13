@@ -10,13 +10,13 @@ use crate::endpoint::validation::check_service_is_available;
 use crate::endpoint::RequestContext;
 use crate::Error;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExecuteRequest {
     pub transaction: ExecutableTransactionParameters,
     pub parameters: ExecutionParameters,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExecutableTransactionParameters {
     Deploy {
@@ -47,7 +47,7 @@ impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::Executabl
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExecutableInvokeParameters {
     #[serde_as(as = "UfeHex")]
     pub user_address: Felt,
