@@ -2527,6 +2527,7 @@ name = "paymaster-client"
 version = "1.0.0"
 dependencies = [
  "paymaster-rpc",
+ "paymaster-starknet",
  "serde",
  "serde_json",
  "starknet",

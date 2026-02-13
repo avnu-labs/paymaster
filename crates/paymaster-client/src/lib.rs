@@ -1,4 +1,5 @@
 mod transaction;
+mod signature;
 
 use std::ops::Deref;
 use std::time::Duration;
@@ -11,7 +12,12 @@ pub use paymaster_rpc::{
     ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteDirectRequest, ExecuteDirectResponse, ExecuteDirectTransactionParameters, ExecuteRequest,
     ExecuteResponse, ExecutionParameters, FeeEstimate, FeeMode, InvokeParameters, InvokeTransaction, TimeBounds, TipPriority, TokenPrice, TransactionParameters,
 };
-pub use transaction::{HasTransaction, NeedsTransaction, PreparedTransaction, TransactionBuilder, STRK_TOKEN};
+pub use transaction::TransactionBuilder;
+use paymaster_starknet::constants::Token;
+use crate::transaction::Unset;
+
+/// STRK token address on Starknet.
+pub const STRK_TOKEN: Felt = Token::STRK_ADDRESS;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -65,7 +71,7 @@ impl PaymasterClient {
     }
 
     /// Starts building a transaction for the given account address.
-    pub fn transaction(&self, address: Felt) -> TransactionBuilder<'_, NeedsTransaction> {
+    pub fn transaction(&self, address: Felt) -> TransactionBuilder<'_, Unset, Unset> {
         TransactionBuilder::new(&self.inner, address)
     }
 }

@@ -6,6 +6,7 @@ repository = { workspace = true }
 
 [dependencies]
 paymaster-rpc = { path = "../paymaster-rpc" }
+paymaster-starknet = { path = "../paymaster-starknet" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["arbitrary_precision", "raw_value"] }
 starknet = { workspace = true }

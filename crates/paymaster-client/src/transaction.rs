@@ -1,23 +1,12 @@
 use paymaster_rpc::client::Client;
-use starknet::core::types::{Call, Felt, TypedData};
+use starknet::core::types::{Call, Felt};
 use starknet::signers::Signer;
-
 use crate::*;
+use crate::signature::sign_typed_data;
 
-/// STRK token address on Starknet.
-pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d");
-
-/// Typestate marker: the builder needs a transaction type (call, deployment, or both).
-pub struct NeedsTransaction;
-
-/// Typestate marker: a transaction type has been set and the builder is ready to build/send.
-pub struct HasTransaction(TransactionKind);
-
-enum TransactionKind {
-    Invoke(Vec<Call>),
-    Deploy(DeploymentParameters),
-    DeployAndInvoke(DeploymentParameters, Vec<Call>),
-}
+pub struct Unset;
+pub struct HasDeploy(DeploymentParameters);
+pub struct HasInvoke(Vec<Call>);
 
 /// High-level builder that orchestrates the build, sign, and execute flow.
 ///
@@ -50,222 +39,334 @@ enum TransactionKind {
 /// println!("Fee: {:?}", prepared.fee);
 /// let result = prepared.send(&wallet).await?;
 /// ```
-pub struct TransactionBuilder<'a, State> {
+pub struct TransactionBuilder<'a, Deploy, Invoke> {
     client: &'a Client,
     address: Felt,
-    gas_token: Option<Felt>,
-    sponsored: bool,
-    tip: TipPriority,
+
+    deploy: Deploy,
+    invoke: Invoke,
+    fee: FeeMode,
+
     time_bounds: Option<TimeBounds>,
-    state: State,
 }
 
-impl<'a> TransactionBuilder<'a, NeedsTransaction> {
-    pub(crate) fn new(client: &'a Client, address: Felt) -> Self {
+impl<'a> TransactionBuilder<'a, Unset, Unset> {
+    pub fn new(client: &'a Client, address: Felt) -> Self {
         Self {
             client,
             address,
-            gas_token: None,
-            sponsored: false,
-            tip: TipPriority::Normal,
+
+            deploy: Unset,
+            invoke: Unset,
+            fee: FeeMode::Default { gas_token: STRK_TOKEN, tip: TipPriority::Normal },
+
             time_bounds: None,
-            state: NeedsTransaction,
-        }
-    }
-
-    /// Sets a single call for the invoke transaction.
-    pub fn call(self, call: Call) -> TransactionBuilder<'a, HasTransaction> {
-        self.calls(vec![call])
-    }
-
-    /// Sets the calls to include in the invoke transaction.
-    pub fn calls(self, calls: Vec<Call>) -> TransactionBuilder<'a, HasTransaction> {
-        self.transition(HasTransaction(TransactionKind::Invoke(calls)))
-    }
-
-    /// Sets deployment parameters for a deploy transaction.
-    pub fn deployment(self, deployment: DeploymentParameters) -> TransactionBuilder<'a, HasTransaction> {
-        self.transition(HasTransaction(TransactionKind::Deploy(deployment)))
-    }
-
-    /// Sets deployment parameters and calls for a deploy-and-invoke transaction.
-    pub fn deploy_and_invoke(self, deployment: DeploymentParameters, calls: Vec<Call>) -> TransactionBuilder<'a, HasTransaction> {
-        self.transition(HasTransaction(TransactionKind::DeployAndInvoke(deployment, calls)))
-    }
-
-    fn transition(self, state: HasTransaction) -> TransactionBuilder<'a, HasTransaction> {
-        TransactionBuilder {
-            client: self.client,
-            address: self.address,
-            gas_token: self.gas_token,
-            sponsored: self.sponsored,
-            tip: self.tip,
-            time_bounds: self.time_bounds,
-            state,
         }
     }
 }
 
-impl<'a, S> TransactionBuilder<'a, S> {
-    /// Sets the gas token address. Defaults to STRK if not specified.
-    pub fn gas_token(mut self, token: Felt) -> Self {
-        self.gas_token = Some(token);
-        self
-    }
-
-    /// Enables sponsored fee mode.
-    pub fn sponsored(mut self) -> Self {
-        self.sponsored = true;
-        self
-    }
-
-    /// Sets the tip priority (default: Normal).
-    pub fn tip(mut self, tip: TipPriority) -> Self {
-        self.tip = tip;
-        self
-    }
-
+impl<'a, Deploy, Invoke> TransactionBuilder<'a, Deploy, Invoke> {
     /// Sets time bounds for transaction execution.
     pub fn time_bounds(mut self, bounds: TimeBounds) -> Self {
         self.time_bounds = Some(bounds);
         self
     }
+
+    /// Sets the calls to include in the invoke transaction.
+    pub fn fee_mode(self, fee_mode: FeeMode) -> TransactionBuilder<'a, Deploy, Invoke> {
+        TransactionBuilder {
+            fee: fee_mode,
+            ..self
+        }
+    }
+
+    pub fn sponsored(self) -> TransactionBuilder<'a, Deploy, Invoke> {
+        self.fee_mode(FeeMode::Sponsored { tip: TipPriority::Normal })
+    }
 }
 
-impl<'a> TransactionBuilder<'a, HasTransaction> {
+impl<'a, Invoke> TransactionBuilder<'a, Unset, Invoke> {
+    /// Sets deployment parameters for a deploy transaction.
+    pub fn deployment(self, deployment: DeploymentParameters) -> TransactionBuilder<'a, HasDeploy, Invoke> {
+        TransactionBuilder {
+            client: self.client,
+            address: self.address,
+
+            deploy: HasDeploy(deployment),
+            invoke: self.invoke,
+            fee: self.fee,
+
+            time_bounds: self.time_bounds
+        }
+    }
+}
+
+impl<'a, Deploy> TransactionBuilder<'a, Deploy, Unset> {
+    pub fn call(self, call: Call) -> TransactionBuilder<'a, Deploy, HasInvoke> {
+        self.calls(vec![call])
+    }
+
+    /// Sets the calls to include in the invoke transaction.
+    pub fn calls(self, calls: Vec<Call>) -> TransactionBuilder<'a, Deploy, HasInvoke> {
+        TransactionBuilder {
+            client: self.client,
+            address: self.address,
+
+            deploy: self.deploy,
+            invoke: HasInvoke(calls),
+            fee: self.fee,
+
+            time_bounds: self.time_bounds
+        }
+    }
+}
+
+impl<'a> TransactionBuilder<'a, HasDeploy, HasInvoke> {
     /// Builds the transaction and returns a [`PreparedTransaction`] with the fee estimate.
     ///
     /// Use this for a two-step flow where you want to inspect fees before signing.
-    pub async fn build(self) -> Result<PreparedTransaction<'a>, Error> {
-        let transaction = match self.state.0 {
-            TransactionKind::Invoke(calls) => TransactionParameters::Invoke {
+    pub async fn build(self) -> Result<BuiltTransaction<'a>, Error> {
+         let request = BuildTransactionRequest {
+            transaction: TransactionParameters::DeployAndInvoke {
+                deployment: self.deploy.0,
                 invoke: InvokeParameters {
                     user_address: self.address,
-                    calls,
+                    calls: self.invoke.0,
                 },
             },
-            TransactionKind::Deploy(deployment) => TransactionParameters::Deploy { deployment },
-            TransactionKind::DeployAndInvoke(deployment, calls) => TransactionParameters::DeployAndInvoke {
-                deployment,
-                invoke: InvokeParameters {
-                    user_address: self.address,
-                    calls,
-                },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: self.fee,
+                time_bounds: self.time_bounds,
             },
         };
 
-        if matches!(transaction, TransactionParameters::Deploy { .. }) && !self.sponsored {
-            return Err(Error::Configuration("deploy-only transactions must be sponsored (use .sponsored())".into()));
-        }
+        let response = self
+            .client
+            .build_transaction(request)
+            .await?;
 
-        let fee_mode = if self.sponsored {
-            FeeMode::Sponsored { tip: self.tip }
-        } else {
-            let gas_token = self.gas_token.unwrap_or(STRK_TOKEN);
-            FeeMode::Default { gas_token, tip: self.tip }
-        };
-
-        let parameters = ExecutionParameters::V1 {
-            fee_mode,
-            time_bounds: self.time_bounds,
-        };
-
-        let build_req = BuildTransactionRequest {
-            transaction,
-            parameters: parameters.clone(),
-        };
-        let build_response = self.client.build_transaction(build_req).await?;
-
-        let fee = match &build_response {
-            BuildTransactionResponse::Invoke(tx) => tx.fee.clone(),
-            BuildTransactionResponse::DeployAndInvoke(tx) => tx.fee.clone(),
-            BuildTransactionResponse::Deploy(tx) => tx.fee.clone(),
-        };
-
-        Ok(PreparedTransaction {
+        Ok(BuiltTransaction {
             client: self.client,
-            build_response,
             address: self.address,
-            parameters,
-            fee,
+
+            transaction: response,
         })
     }
 
-    /// Executes the full build, sign, and execute flow.
     pub async fn send<S>(self, signer: &S) -> Result<ExecuteResponse, Error>
     where
-        S: Signer + Send + Sync,
+        S: Signer + Send + Sync
     {
-        self.build().await?.send(signer).await
+        self
+            .build()
+            .await?
+            .sign(signer)
+            .await?
+            .execute()
+            .await
+    }
+}
+
+impl<'a> TransactionBuilder<'a, HasDeploy, Unset> {
+    /// Builds the transaction and returns a [`PreparedTransaction`] with the fee estimate.
+    ///
+    /// Use this for a two-step flow where you want to inspect fees before signing.
+    pub async fn build(self) -> Result<BuiltTransaction<'a>, Error> {
+        if !matches!(self.fee, FeeMode::Sponsored { .. }) {
+            return Err(Error::Configuration("deploy-only only supported in sponsored mode".to_string()))
+        }
+
+        let request = BuildTransactionRequest {
+            transaction: TransactionParameters::Deploy {
+                deployment: self.deploy.0,
+            },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: self.fee,
+                time_bounds: self.time_bounds,
+            },
+        };
+
+        let response = self
+            .client
+            .build_transaction(request)
+            .await?;
+
+        Ok(BuiltTransaction {
+            client: self.client,
+            address: self.address,
+
+            transaction: response,
+        })
+    }
+
+    pub async fn send<S>(self, signer: &S) -> Result<ExecuteResponse, Error>
+    where
+        S: Signer + Send + Sync
+    {
+        self
+            .build()
+            .await?
+            .sign(signer)
+            .await?
+            .execute()
+            .await
+    }
+}
+
+impl<'a> TransactionBuilder<'a, Unset, HasInvoke> {
+    /// Builds the transaction and returns a [`PreparedTransaction`] with the fee estimate.
+    ///
+    /// Use this for a two-step flow where you want to inspect fees before signing.
+    pub async fn build(self) -> Result<BuiltTransaction<'a>, Error> {
+        let request = BuildTransactionRequest {
+            transaction: TransactionParameters::Invoke {
+                invoke: InvokeParameters {
+                    user_address: self.address,
+                    calls: self.invoke.0,
+                },
+            },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: self.fee,
+                time_bounds: self.time_bounds,
+            },
+        };
+
+        let response = self
+            .client
+            .build_transaction(request)
+            .await?;
+
+        Ok(BuiltTransaction {
+            client: self.client,
+            address: self.address,
+
+            transaction: response,
+        })
+    }
+
+    pub async fn send<S>(self, signer: &S) -> Result<ExecuteResponse, Error>
+    where
+        S: Signer + Send + Sync
+    {
+        self
+            .build()
+            .await?
+            .sign(signer)
+            .await?
+            .execute()
+            .await
     }
 }
 
 /// A transaction that has been built and is ready to be signed and sent.
 ///
 /// Contains the fee estimate from the build step, allowing inspection before signing.
-pub struct PreparedTransaction<'a> {
+pub struct BuiltTransaction<'a> {
     client: &'a Client,
-    build_response: BuildTransactionResponse,
     address: Felt,
-    parameters: ExecutionParameters,
-    /// The estimated fee for this transaction.
-    pub fee: FeeEstimate,
+
+    transaction: BuildTransactionResponse,
 }
 
-impl<'a> PreparedTransaction<'a> {
-    /// Signs and sends the prepared transaction.
+impl<'a> BuiltTransaction<'a> {
+    pub fn fee_estimate(&self) -> FeeEstimate {
+        match &self.transaction {
+            BuildTransactionResponse::Invoke(tx) => tx.fee.clone(),
+            BuildTransactionResponse::DeployAndInvoke(tx) => tx.fee.clone(),
+            BuildTransactionResponse::Deploy(tx) => tx.fee.clone(),
+        }
+    }
+
+    pub fn execution_parameters(&self) -> ExecutionParameters {
+        match &self.transaction {
+            BuildTransactionResponse::Invoke(tx) => tx.parameters.clone(),
+            BuildTransactionResponse::DeployAndInvoke(tx) => tx.parameters.clone(),
+            BuildTransactionResponse::Deploy(tx) => tx.parameters.clone(),
+        }
+    }
+
+    pub async fn sign<S>(self, signer: &'a S) -> Result<ExecutableTransaction<'a>, Error>
+    where
+        S: Signer + Send + Sync
+    {
+        Ok(ExecutableTransaction {
+            client: self.client,
+
+            transaction: match &self.transaction {
+                BuildTransactionResponse::Invoke(tx) => self.build_invoke(signer, tx).await?,
+                BuildTransactionResponse::DeployAndInvoke(tx) => self.build_deploy_and_invoke(signer, tx).await?,
+                BuildTransactionResponse::Deploy(tx) => self.build_deploy(tx)?,
+            },
+            parameters: self.execution_parameters()
+        })
+    }
+
+    fn build_deploy(&self, tx: &DeployTransaction) -> Result<ExecutableTransactionParameters, Error> {
+        Ok(ExecutableTransactionParameters::Deploy {
+            deployment: tx.deployment.clone(),
+        })
+    }
+
+    async fn build_invoke<S>(&self, signer: &S, tx: &InvokeTransaction) -> Result<ExecutableTransactionParameters, Error>
+    where
+        S: Signer + Send + Sync
+    {
+        Ok(ExecutableTransactionParameters::Invoke {
+            invoke: ExecutableInvokeParameters {
+                user_address: self.address,
+                typed_data: tx.typed_data.clone(),
+                signature: sign_typed_data(&tx.typed_data, self.address, signer).await?,
+            },
+        })
+    }
+
+    async fn build_deploy_and_invoke<S>(&self, signer: &S, tx: &DeployAndInvokeTransaction) -> Result<ExecutableTransactionParameters, Error>
+    where
+        S: Signer + Send + Sync
+    {
+        Ok(ExecutableTransactionParameters::DeployAndInvoke {
+            deployment: tx.deployment.clone(),
+            invoke: ExecutableInvokeParameters {
+                user_address: self.address,
+                typed_data: tx.typed_data.clone(),
+                signature: sign_typed_data(&tx.typed_data, self.address, signer).await?,
+            },
+        })
+    }
+
     pub async fn send<S>(self, signer: &S) -> Result<ExecuteResponse, Error>
     where
-        S: Signer + Send + Sync,
+        S: Signer + Send + Sync
     {
-        let exec_transaction = match self.build_response {
-            BuildTransactionResponse::Invoke(ref tx) => {
-                let signature = sign_typed_data(&tx.typed_data, self.address, signer).await?;
-                ExecutableTransactionParameters::Invoke {
-                    invoke: ExecutableInvokeParameters {
-                        user_address: self.address,
-                        typed_data: tx.typed_data.clone(),
-                        signature,
-                    },
-                }
-            },
-            BuildTransactionResponse::DeployAndInvoke(ref tx) => {
-                let signature = sign_typed_data(&tx.typed_data, self.address, signer).await?;
-                ExecutableTransactionParameters::DeployAndInvoke {
-                    deployment: tx.deployment.clone(),
-                    invoke: ExecutableInvokeParameters {
-                        user_address: self.address,
-                        typed_data: tx.typed_data.clone(),
-                        signature,
-                    },
-                }
-            },
-            BuildTransactionResponse::Deploy(ref tx) => ExecutableTransactionParameters::Deploy {
-                deployment: tx.deployment.clone(),
-            },
-        };
-
-        let exec_req = ExecuteRequest {
-            transaction: exec_transaction,
-            parameters: self.parameters,
-        };
-
-        Ok(self.client.execute_transaction(exec_req).await?)
+        self
+            .sign(signer)
+            .await?
+            .execute()
+            .await
     }
 }
 
-async fn sign_typed_data<S>(typed_data: &TypedData, address: Felt, signer: &S) -> Result<Vec<Felt>, Error>
-where
-    S: Signer + Send + Sync,
-{
-    let message_hash = typed_data
-        .message_hash(address)
-        .map_err(|e| Error::Signing(format!("failed to compute message hash: {e}")))?;
-    let sig = signer
-        .sign_hash(&message_hash)
-        .await
-        .map_err(|e| Error::Signing(e.to_string()))?;
-    Ok(vec![sig.r, sig.s])
+pub struct ExecutableTransaction<'a> {
+    client: &'a Client,
+
+    transaction: ExecutableTransactionParameters,
+    parameters: ExecutionParameters
+}
+
+impl<'a> ExecutableTransaction<'a> {
+    pub async fn execute(self) -> Result<ExecuteResponse, Error> {
+        let request = ExecuteRequest {
+            transaction: self.transaction,
+            parameters: self.parameters,
+        };
+
+        let response = self
+            .client
+            .execute_transaction(request)
+            .await?;
+
+        Ok(response)
+    }
 }
 
 #[cfg(test)]
@@ -435,8 +536,10 @@ mod tests {
                 sigdata: None,
                 version: 1,
             })
+            .fee_mode(FeeMode::Sponsored { tip: TipPriority::Normal })
             .send(&test_wallet())
             .await;
+
         assert!(matches!(result, Err(Error::Configuration(ref msg)) if msg.contains("sponsored")));
     }
 
@@ -495,8 +598,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(prepared.fee.estimated_fee_in_strk, Felt::from_hex_unchecked("0x100"));
-        assert_eq!(prepared.fee.suggested_max_fee_in_strk, Felt::from_hex_unchecked("0x200"));
+        assert_eq!(prepared.fee_estimate().estimated_fee_in_strk, Felt::from_hex_unchecked("0x100"));
+        assert_eq!(prepared.fee_estimate().suggested_max_fee_in_strk, Felt::from_hex_unchecked("0x200"));
     }
 
     #[tokio::test]
@@ -525,7 +628,11 @@ mod tests {
             .await
             .unwrap();
 
-        let result = prepared.send(&test_wallet()).await.unwrap();
+        let result = prepared
+            .send(&test_wallet())
+            .await
+            .unwrap();
+
         assert_eq!(result.transaction_hash, Felt::from_hex_unchecked("0xdeadbeef"));
     }
 
