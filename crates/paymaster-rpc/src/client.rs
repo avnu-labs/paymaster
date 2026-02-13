@@ -72,18 +72,15 @@ impl ClientBuilder {
     }
 
     pub fn build(self) -> Result<Client, Error> {
-        let mut builder = HttpClientBuilder::default().request_timeout(self.timeout);
-
+        let mut headers = HeaderMap::new();
         if let Some(key) = self.api_key {
-            let mut headers = HeaderMap::new();
             headers.insert(
                 "x-paymaster-api-key",
                 HeaderValue::from_str(&key).map_err(|e| Error::Custom(format!("invalid API key header value: {e}")))?,
             );
-            builder = builder.set_headers(headers);
         }
 
-        let inner = builder.build(&self.endpoint)?;
+        let inner = HttpClientBuilder::default().request_timeout(self.timeout).set_headers(headers).build(&self.endpoint)?;
         Ok(Client { inner })
     }
 }

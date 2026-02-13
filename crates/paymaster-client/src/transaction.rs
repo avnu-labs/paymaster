@@ -2,8 +2,7 @@ use paymaster_rpc::client::Client;
 use starknet::core::types::{Call, Felt, TypedData};
 use starknet::signers::Signer;
 
-use crate::types::*;
-use crate::Error;
+use crate::*;
 
 /// STRK token address on Starknet.
 pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d");
