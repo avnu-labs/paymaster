@@ -152,6 +152,11 @@ The codebase uses `thiserror` for error handling with comprehensive error types:
 - Comprehensive error handling for network issues
 - Gas price monitoring and fee estimation
 
+### Builder Pattern
+- Builders must use the typestate pattern to enforce required fields at compile time
+- Required parameters go in the constructor or in methods that transition state
+- Optional parameters work on any state via a generic impl block
+
 ### Relayer Management
 - Segregated locking to prevent race conditions
 - Automatic rebalancing via AVNU swaps

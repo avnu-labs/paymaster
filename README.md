@@ -126,7 +126,7 @@ paymaster-client = { git = "https://github.com/avnu-labs/paymaster" }
 ```
 
 ```rust
-use paymaster_client::{PaymasterClient, TransactionBuilder, STRK_TOKEN};
+use paymaster_client::{PaymasterClient, STRK_TOKEN};
 
 #[tokio::main]
 async fn main() -> Result<(), paymaster_client::Error> {
@@ -135,9 +135,8 @@ async fn main() -> Result<(), paymaster_client::Error> {
         .build()?;
 
     // Sponsored transaction (gas paid by the paymaster)
-    let resp = TransactionBuilder::new(&client)
+    let resp = client.transaction(your_account_address)
         .call(your_call())
-        .address(your_account_address)
         .sponsored()
         .send(&your_wallet)
         .await?;
@@ -145,18 +144,16 @@ async fn main() -> Result<(), paymaster_client::Error> {
     println!("tx hash: {:#x}", resp.transaction_hash);
 
     // Non-sponsored transaction (gas defaults to STRK)
-    let resp = TransactionBuilder::new(&client)
+    let resp = client.transaction(your_account_address)
         .call(your_call())
-        .address(your_account_address)
         .send(&your_wallet)
         .await?;
 
     println!("tx hash: {:#x}", resp.transaction_hash);
 
     // Two-step flow: inspect fees before signing
-    let prepared = TransactionBuilder::new(&client)
+    let prepared = client.transaction(your_account_address)
         .call(your_call())
-        .address(your_account_address)
         .gas_token(STRK_TOKEN)
         .build()
         .await?;

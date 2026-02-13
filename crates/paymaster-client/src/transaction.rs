@@ -7,82 +7,106 @@ use crate::*;
 /// STRK token address on Starknet.
 pub const STRK_TOKEN: Felt = Felt::from_hex_unchecked("0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d");
 
+/// Typestate marker: the builder needs a transaction type (call, deployment, or both).
+pub struct NeedsTransaction;
+
+/// Typestate marker: a transaction type has been set and the builder is ready to build/send.
+pub struct HasTransaction(TransactionKind);
+
+enum TransactionKind {
+    Invoke(Vec<Call>),
+    Deploy(DeploymentParameters),
+    DeployAndInvoke(DeploymentParameters, Vec<Call>),
+}
+
 /// High-level builder that orchestrates the build, sign, and execute flow.
+///
+/// Uses the typestate pattern to enforce that a transaction type is set before building.
+/// Created via [`PaymasterClient::transaction()`](crate::PaymasterClient::transaction).
 ///
 /// # Example
 ///
 /// ```ignore
 /// use starknet::signers::{LocalWallet, SigningKey};
 ///
+/// let client = PaymasterClient::builder("https://sepolia.paymaster.avnu.fi/")
+///     .api_key("my-key")
+///     .build()?;
 /// let wallet = LocalWallet::from_signing_key(SigningKey::from_secret_scalar(private_key));
 ///
 /// // One-step flow
-/// let result = TransactionBuilder::new(&client)
+/// client.transaction(account_address)
 ///     .call(transfer_call)
-///     .address(account_address)
 ///     .sponsored()
 ///     .send(&wallet)
 ///     .await?;
 ///
 /// // Two-step flow with fee inspection
-/// let prepared = TransactionBuilder::new(&client)
+/// let prepared = client.transaction(account_address)
 ///     .call(transfer_call)
-///     .address(account_address)
 ///     .build()
 ///     .await?;
 ///
 /// println!("Fee: {:?}", prepared.fee);
 /// let result = prepared.send(&wallet).await?;
 /// ```
-pub struct TransactionBuilder<'a> {
+pub struct TransactionBuilder<'a, State> {
     client: &'a Client,
-    calls: Option<Vec<Call>>,
-    address: Option<Felt>,
-    deployment: Option<DeploymentParameters>,
+    address: Felt,
     gas_token: Option<Felt>,
     sponsored: bool,
     tip: TipPriority,
     time_bounds: Option<TimeBounds>,
+    state: State,
 }
 
-impl<'a> TransactionBuilder<'a> {
-    pub fn new(client: &'a Client) -> Self {
+impl<'a> TransactionBuilder<'a, NeedsTransaction> {
+    pub(crate) fn new(client: &'a Client, address: Felt) -> Self {
         Self {
             client,
-            calls: None,
-            address: None,
-            deployment: None,
+            address,
             gas_token: None,
             sponsored: false,
             tip: TipPriority::Normal,
             time_bounds: None,
+            state: NeedsTransaction,
         }
     }
 
-    /// Sets the calls to include in the invoke transaction.
-    pub fn calls(mut self, calls: Vec<Call>) -> Self {
-        self.calls = Some(calls);
-        self
-    }
-
     /// Sets a single call for the invoke transaction.
-    /// Convenience wrapper around [`calls()`](TransactionBuilder::calls).
-    pub fn call(self, call: Call) -> Self {
+    pub fn call(self, call: Call) -> TransactionBuilder<'a, HasTransaction> {
         self.calls(vec![call])
     }
 
-    /// Sets the address of the account that will sign and execute the transaction.
-    pub fn address(mut self, address: Felt) -> Self {
-        self.address = Some(address);
-        self
+    /// Sets the calls to include in the invoke transaction.
+    pub fn calls(self, calls: Vec<Call>) -> TransactionBuilder<'a, HasTransaction> {
+        self.transition(HasTransaction(TransactionKind::Invoke(calls)))
     }
 
-    /// Sets deployment parameters for a deploy or deploy-and-invoke transaction.
-    pub fn deployment(mut self, deployment: DeploymentParameters) -> Self {
-        self.deployment = Some(deployment);
-        self
+    /// Sets deployment parameters for a deploy transaction.
+    pub fn deployment(self, deployment: DeploymentParameters) -> TransactionBuilder<'a, HasTransaction> {
+        self.transition(HasTransaction(TransactionKind::Deploy(deployment)))
     }
 
+    /// Sets deployment parameters and calls for a deploy-and-invoke transaction.
+    pub fn deploy_and_invoke(self, deployment: DeploymentParameters, calls: Vec<Call>) -> TransactionBuilder<'a, HasTransaction> {
+        self.transition(HasTransaction(TransactionKind::DeployAndInvoke(deployment, calls)))
+    }
+
+    fn transition(self, state: HasTransaction) -> TransactionBuilder<'a, HasTransaction> {
+        TransactionBuilder {
+            client: self.client,
+            address: self.address,
+            gas_token: self.gas_token,
+            sponsored: self.sponsored,
+            tip: self.tip,
+            time_bounds: self.time_bounds,
+            state,
+        }
+    }
+}
+
+impl<'a, S> TransactionBuilder<'a, S> {
     /// Sets the gas token address. Defaults to STRK if not specified.
     pub fn gas_token(mut self, token: Felt) -> Self {
         self.gas_token = Some(token);
@@ -106,30 +130,27 @@ impl<'a> TransactionBuilder<'a> {
         self.time_bounds = Some(bounds);
         self
     }
+}
 
+impl<'a> TransactionBuilder<'a, HasTransaction> {
     /// Builds the transaction and returns a [`PreparedTransaction`] with the fee estimate.
     ///
     /// Use this for a two-step flow where you want to inspect fees before signing.
     pub async fn build(self) -> Result<PreparedTransaction<'a>, Error> {
-        let address = self.address.ok_or_else(|| Error::Configuration("address is required".into()))?;
-
-        let transaction = match (&self.deployment, &self.calls) {
-            (Some(deployment), Some(calls)) => TransactionParameters::DeployAndInvoke {
-                deployment: deployment.clone(),
+        let transaction = match self.state.0 {
+            TransactionKind::Invoke(calls) => TransactionParameters::Invoke {
                 invoke: InvokeParameters {
-                    user_address: address,
-                    calls: calls.clone(),
+                    user_address: self.address,
+                    calls,
                 },
             },
-            (Some(deployment), None) => TransactionParameters::Deploy { deployment: deployment.clone() },
-            (None, Some(calls)) => TransactionParameters::Invoke {
+            TransactionKind::Deploy(deployment) => TransactionParameters::Deploy { deployment },
+            TransactionKind::DeployAndInvoke(deployment, calls) => TransactionParameters::DeployAndInvoke {
+                deployment,
                 invoke: InvokeParameters {
-                    user_address: address,
-                    calls: calls.clone(),
+                    user_address: self.address,
+                    calls,
                 },
-            },
-            (None, None) => {
-                return Err(Error::Configuration("either calls or deployment is required".into()));
             },
         };
 
@@ -164,7 +185,7 @@ impl<'a> TransactionBuilder<'a> {
         Ok(PreparedTransaction {
             client: self.client,
             build_response,
-            address,
+            address: self.address,
             parameters,
             fee,
         })
@@ -254,8 +275,7 @@ mod tests {
     use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
     use super::*;
-
-    type PaymasterClient = paymaster_rpc::client::Client;
+    use crate::PaymasterClient;
 
     struct JsonRpcOk(serde_json::Value);
 
@@ -367,20 +387,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_error_without_address() {
-        let client = PaymasterClient::new("http://localhost:1234");
-        let result = TransactionBuilder::new(&client).calls(vec![]).send(&test_wallet()).await;
-        assert!(matches!(result, Err(Error::Configuration(_))));
-    }
-
-    #[tokio::test]
-    async fn should_error_without_calls_or_deployment() {
-        let client = PaymasterClient::new("http://localhost:1234");
-        let result = TransactionBuilder::new(&client).address(Felt::ONE).send(&test_wallet()).await;
-        assert!(matches!(result, Err(Error::Configuration(_))));
-    }
-
-    #[tokio::test]
     async fn should_default_gas_token_to_strk() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -408,9 +414,9 @@ mod tests {
             .await;
 
         let client = PaymasterClient::new(&server.uri());
-        TransactionBuilder::new(&client)
+        client
+            .transaction(Felt::from_hex_unchecked("0x1234"))
             .calls(vec![])
-            .address(Felt::from_hex_unchecked("0x1234"))
             .send(&test_wallet())
             .await
             .unwrap();
@@ -419,7 +425,8 @@ mod tests {
     #[tokio::test]
     async fn should_reject_deploy_only_when_not_sponsored() {
         let client = PaymasterClient::new("http://localhost:1234");
-        let result = TransactionBuilder::new(&client)
+        let result = client
+            .transaction(Felt::ONE)
             .deployment(DeploymentParameters {
                 address: Felt::ONE,
                 class_hash: Felt::TWO,
@@ -428,7 +435,6 @@ mod tests {
                 sigdata: None,
                 version: 1,
             })
-            .address(Felt::ONE)
             .send(&test_wallet())
             .await;
         assert!(matches!(result, Err(Error::Configuration(ref msg)) if msg.contains("sponsored")));
@@ -452,7 +458,8 @@ mod tests {
             .await;
 
         let client = PaymasterClient::new(&server.uri());
-        let result = TransactionBuilder::new(&client)
+        let result = client
+            .transaction(Felt::ONE)
             .deployment(DeploymentParameters {
                 address: Felt::ONE,
                 class_hash: Felt::TWO,
@@ -461,7 +468,6 @@ mod tests {
                 sigdata: None,
                 version: 1,
             })
-            .address(Felt::ONE)
             .sponsored()
             .send(&test_wallet())
             .await
@@ -481,9 +487,9 @@ mod tests {
             .await;
 
         let client = PaymasterClient::new(&server.uri());
-        let prepared = TransactionBuilder::new(&client)
+        let prepared = client
+            .transaction(Felt::from_hex_unchecked("0x1234"))
             .calls(vec![])
-            .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()
             .build()
             .await
@@ -511,9 +517,9 @@ mod tests {
             .await;
 
         let client = PaymasterClient::new(&server.uri());
-        let prepared = TransactionBuilder::new(&client)
+        let prepared = client
+            .transaction(Felt::from_hex_unchecked("0x1234"))
             .calls(vec![])
-            .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()
             .build()
             .await
@@ -542,9 +548,9 @@ mod tests {
 
         let wallet = LocalWallet::from_signing_key(SigningKey::from_secret_scalar(Felt::from_hex_unchecked("0x5678")));
         let client = PaymasterClient::new(&server.uri());
-        let result = TransactionBuilder::new(&client)
+        let result = client
+            .transaction(Felt::from_hex_unchecked("0x1234"))
             .calls(vec![])
-            .address(Felt::from_hex_unchecked("0x1234"))
             .sponsored()
             .send(&wallet)
             .await
