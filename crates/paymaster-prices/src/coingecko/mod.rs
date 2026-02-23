@@ -148,11 +148,14 @@ impl CoingeckoPriceClient {
             .append_pair("ids", token_id)
             .append_pair("vs_currencies", "usd");
 
-        let response: CoingeckoResponse<PriceResponse> = self.client.get(url).send().await?.json().await?;
+        let text = self.client.get(url).send().await?.text().await?;
 
-        let prices = match response {
-            CoingeckoResponse::Success(x) => x,
-            CoingeckoResponse::Error { status } => return Err(Error::Internal(status.error_message)),
+        let prices = match serde_json::from_str::<PriceResponse>(&text) {
+            Ok(prices) => prices,
+            Err(_) => match serde_json::from_str::<CoingeckoResponse<PriceResponse>>(&text) {
+                Ok(CoingeckoResponse::Error { status }) => return Err(Error::Internal(status.error_message)),
+                _ => return Err(Error::Format(text)),
+            },
         };
 
         let price = prices.0.get(token_id).cloned().ok_or(Error::InvalidPrice(*token))?;
