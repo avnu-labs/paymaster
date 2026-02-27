@@ -247,13 +247,12 @@ async fn build_transaction(ctx: &Context, request: BuildTransactionRequest) -> R
     })
 }
 
-async fn build_private_invoke(
-    ctx: &Context,
-    params: PrivateInvokeParameters,
-    execution_params: &ExecutionParameters,
-) -> Result<BuildTransactionResponse, Error> {
+async fn build_private_invoke(ctx: &Context, params: PrivateInvokeParameters, execution_params: &ExecutionParameters) -> Result<BuildTransactionResponse, Error> {
     let privacy_config = ctx.configuration.privacy.as_ref().ok_or(Error::PrivacyPoolNotConfigured)?;
-    let pool_config = privacy_config.pools.get(&params.pool_address).ok_or(Error::PrivacyPoolNotConfigured)?;
+    let pool_config = privacy_config
+        .pools
+        .get(&params.pool_address)
+        .ok_or(Error::PrivacyPoolNotConfigured)?;
 
     let gas_token = execution_params.gas_token();
     if !execution_params.fee_mode().is_sponsored() && !pool_config.accepted_gas_tokens.contains(&gas_token) {
@@ -273,7 +272,9 @@ async fn build_private_invoke(
     let gas_estimate_in_strk = Felt::ZERO;
 
     // Total fee = (pool_fee + gas_estimate) * privacy_overhead
-    let total_fee_in_strk = ctx.execution.apply_privacy_fee_multiplier(pool_fee_in_strk + gas_estimate_in_strk);
+    let total_fee_in_strk = ctx
+        .execution
+        .apply_privacy_fee_multiplier(pool_fee_in_strk + gas_estimate_in_strk);
 
     let token = ctx.execution.price.fetch_token(gas_token).await?;
     let total_fee_in_gas_token = convert_strk_to_token(&token, total_fee_in_strk, true)?;

@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::accounts::Account;
 use starknet::core::serde::unsigned_field_element::UfeHex;
-use starknet::core::types::{BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, ResourceBounds, ResourceBoundsMapping};
+use starknet::core::types::{
+    BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, ResourceBounds, ResourceBoundsMapping,
+};
 use starknet::macros::selector;
 use std::hash::{DefaultHasher, Hash, Hasher};
 

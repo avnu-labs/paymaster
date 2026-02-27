@@ -1,3 +1,4 @@
+use paymaster_common::{measure_duration, metric};
 use paymaster_execution::ExecutableTransaction;
 use paymaster_starknet::transaction::{Calls, PrivateProofData};
 use paymaster_starknet::Signature;
@@ -181,13 +182,30 @@ async fn execute_private_invoke(
     };
     let calls = Calls::new(vec![approve_call, apply_actions_call]);
 
-    let estimated_calls = ctx.execution.estimate_with_proof(&calls, execution_params.tip(), &params.proof_data).await?;
-    let result = ctx.execution.execute(&estimated_calls, Some(&params.proof_data)).await?;
+    let pool_addr = params.pool_address.to_fixed_hex_string();
 
-    Ok(ExecuteResponse {
-        transaction_hash: result.transaction_hash,
-        tracking_id: Felt::ZERO,
-    })
+    let estimated_calls = ctx
+        .execution
+        .estimate_with_proof(&calls, execution_params.tip(), &params.proof_data)
+        .await?;
+    let (result, duration) = measure_duration!(ctx.execution.execute(&estimated_calls, Some(&params.proof_data)).await);
+
+    metric!(counter[privacy_execution_request] = 1, pool_address = pool_addr);
+    metric!(
+        histogram[privacy_execution_request_duration_milliseconds] = duration.as_millis(),
+        pool_address = pool_addr
+    );
+
+    match result {
+        Ok(result) => Ok(ExecuteResponse {
+            transaction_hash: result.transaction_hash,
+            tracking_id: Felt::ZERO,
+        }),
+        Err(e) => {
+            metric!(counter[privacy_execution_request_error] = 1, pool_address = pool_addr, error = e.to_string());
+            Err(e.into())
+        },
+    }
 }
 
 #[cfg(test)]

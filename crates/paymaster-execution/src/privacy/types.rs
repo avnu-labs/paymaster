@@ -124,7 +124,10 @@ mod tests {
     }
 
     fn a_deposit() -> ClientAction {
-        ClientAction::Deposit(DepositInput { token: Felt::from(0x1u64), amount: Felt::from(50u64) })
+        ClientAction::Deposit(DepositInput {
+            token: Felt::from(0x1u64),
+            amount: Felt::from(50u64),
+        })
     }
 
     fn an_invoke_external() -> ClientAction {

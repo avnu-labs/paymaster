@@ -3,6 +3,7 @@ pub mod types;
 use std::time::Duration;
 
 use paymaster_common::cache::ExpirableCache;
+use paymaster_common::metric;
 use starknet::core::types::{Felt, FunctionCall};
 use starknet::macros::selector;
 use tracing::warn;
@@ -39,12 +40,17 @@ impl PrivacyPoolClient {
 
         match self.starknet.call(&call).await {
             Ok(result) => {
-                let felt = result.first().cloned().ok_or_else(|| Error::Execution("get_fee_amount returned empty response".into()))?;
-                let fee_amount: u128 =
-                    felt.try_into().map_err(|_| Error::Execution("get_fee_amount returned value exceeding u128".into()))?;
+                let felt = result
+                    .first()
+                    .cloned()
+                    .ok_or_else(|| Error::Execution("get_fee_amount returned empty response".into()))?;
+                let fee_amount: u128 = felt
+                    .try_into()
+                    .map_err(|_| Error::Execution("get_fee_amount returned value exceeding u128".into()))?;
                 self.cache.insert(pool_address, fee_amount, self.cache_ttl);
+                metric!(gauge[privacy_pool_fee_amount] = fee_amount as f64, pool_address = pool_address.to_fixed_hex_string());
                 Ok(fee_amount)
-            }
+            },
             Err(e) => {
                 if let Some(cached) = self.cache.get_if_not_expired(&pool_address) {
                     warn!("Failed to fetch get_fee_amount for pool {}, using stale cache: {}", pool_address, e);
@@ -52,7 +58,7 @@ impl PrivacyPoolClient {
                 } else {
                     Err(Error::Execution(format!("Failed to fetch get_fee_amount for pool {}: {}", pool_address, e)))
                 }
-            }
+            },
         }
     }
 }

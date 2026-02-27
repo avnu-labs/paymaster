@@ -209,12 +209,7 @@ impl EstimatedCalls {
         Ok(result?)
     }
 
-    pub async fn execute_with_proof(
-        &self,
-        account: &StarknetAccount,
-        nonce: Felt,
-        proof_data: &PrivateProofData,
-    ) -> Result<InvokeTransactionResult, Error> {
+    pub async fn execute_with_proof(&self, account: &StarknetAccount, nonce: Felt, proof_data: &PrivateProofData) -> Result<InvokeTransactionResult, Error> {
         let result = account
             .execute_v3(self.calls.to_vec())
             .nonce(nonce)

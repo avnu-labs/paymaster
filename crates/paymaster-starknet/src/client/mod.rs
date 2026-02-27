@@ -124,7 +124,11 @@ impl Provider for StarknetClient {
 
     /// Gets block information with full transactions and receipts given the block id.
     #[instrument(name = "get_block_with_receipts", skip(self, block_id, response_flags), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_receipts<B>(&self, block_id: B, response_flags: Option<&[TransactionResponseFlag]>) -> Result<MaybePreConfirmedBlockWithReceipts, ProviderError>
+    async fn get_block_with_receipts<B>(
+        &self,
+        block_id: B,
+        response_flags: Option<&[TransactionResponseFlag]>,
+    ) -> Result<MaybePreConfirmedBlockWithReceipts, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
@@ -177,7 +181,12 @@ impl Provider for StarknetClient {
 
     /// Gets the details of a transaction by a given block id and index.
     #[instrument(name = "get_transaction_by_block_id_and_index", skip(self, block_id, response_flags), fields(block_id = ?block_id.as_ref()))]
-    async fn get_transaction_by_block_id_and_index<B>(&self, block_id: B, index: u64, response_flags: Option<&[TransactionResponseFlag]>) -> Result<Transaction, ProviderError>
+    async fn get_transaction_by_block_id_and_index<B>(
+        &self,
+        block_id: B,
+        index: u64,
+        response_flags: Option<&[TransactionResponseFlag]>,
+    ) -> Result<Transaction, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
