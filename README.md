@@ -3,7 +3,7 @@
 Gas abstraction made easy on Starknet - open-source, production-ready, fully extensible.
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Docs](https://img.shields.io/badge/docs-available-green)](https://docs.avnu.fi/docs/paymaster)
+[![Docs](https://img.shields.io/badge/docs-available-green)](https://docs.out-of-gas.xyz)
 [![Build](https://img.shields.io/github/actions/workflow/status/avnu-labs/paymaster/main.yml)](https://github.com/avnu-labs/paymaster/actions)
 [![codecov](https://codecov.io/gh/avnu-labs/paymaster/graph/badge.svg)](https://codecov.io/gh/avnu-labs/paymaster)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/avnu_developers)
@@ -22,15 +22,15 @@ SNIP-29 compliant Paymaster for Starknet.
 
 ## Features
 
-- **Gasless** -Let users pay gas in any ERC-20 (USDC, ETH, ...)
-- **Gasfree** -Sponsor user transactions with flexible logic (API key or webhook)
-- **Fast setup** -Deploy a full Paymaster in 2 minutes with the CLI
-- **Auto-rebalancing** -Swap supported tokens into STRK and refill relayers automatically
-- **Scales effortlessly** -Vertical (more relayers) or horizontal (multi-instance with Redis)
-- **Full observability** -OpenTelemetry metrics, logs and traces out of the box
-- **SNIP-29 compliant** -Integrates with `starknet.js` and `starknet-react`
-- **Extensible by design** -Bring your own price feeds, database, or logic
-- **Audited** -Forwarder contract reviewed by Nethermind
+- **Gasless** - Let users pay gas in any ERC-20 (USDC, ETH, ...)
+- **Gasfree** - Sponsor user transactions with flexible logic (API key or webhook)
+- **Fast setup** - Deploy a full Paymaster in 2 minutes with the CLI
+- **Auto-rebalancing** - Swap supported tokens into STRK and refill relayers automatically
+- **Scales effortlessly** - Vertical (more relayers) or horizontal (multi-instance with Redis)
+- **Full observability** - OpenTelemetry metrics, logs and traces out of the box
+- **SNIP-29 compliant** - Integrates with `starknet.js` and `starknet-react`
+- **Extensible by design** - Bring your own price feeds, database, or logic
+- **Audited** - Forwarder contract reviewed by Nethermind
 
 ## Integrate in your dApp
 
