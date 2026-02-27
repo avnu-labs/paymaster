@@ -113,6 +113,8 @@ impl TestEnvironment {
                 fallbacks: vec![],
             },
             sponsoring: paymaster_sponsoring::Configuration::none(),
+
+            privacy: None,
         };
 
         Self {

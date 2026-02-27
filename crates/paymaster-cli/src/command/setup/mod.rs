@@ -278,6 +278,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
             .collect(),
         }),
         sponsoring: DEFAULT_SPONSORING_MODE,
+        privacy: None,
     };
 
     // Perform rebalancing

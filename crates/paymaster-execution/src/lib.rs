@@ -3,9 +3,10 @@ extern crate starknet as starknet_rust;
 mod execution;
 
 use std::cmp::max;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
+use ::starknet::macros::felt;
 pub use execution::*;
 
 pub mod diagnostics;
@@ -30,6 +31,35 @@ mod filter;
 pub use filter::TransactionDuplicateFilter;
 
 use crate::starknet::Client as Starknet;
+use serde::{Deserialize, Serialize};
+
+/// Mainnet STRK token address
+fn default_strk_token_address() -> Felt {
+    felt!("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")
+}
+
+/// Configuration for a single privacy pool
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrivacyPoolConfiguration {
+    /// Pool contract address
+    pub pool_address: Felt,
+    /// Fixed address receiving all Withdraws
+    pub fee_recipient: Felt,
+    /// Tokens accepted for fee payment from this pool
+    pub accepted_gas_tokens: HashSet<Felt>,
+    /// STRK token address (defaults to mainnet STRK, override for devnet)
+    #[serde(default = "default_strk_token_address")]
+    pub strk_token_address: Felt,
+}
+
+/// Privacy configuration containing pool definitions and fee settings
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrivacyConfiguration {
+    /// Map of pool_address → pool config
+    pub pools: HashMap<Felt, PrivacyPoolConfiguration>,
+    /// Fee overhead for privacy gasless txs (e.g., 0.5 = 50%)
+    pub privacy_fee_overhead: f32,
+}
 
 /// Execution client configuration
 #[derive(Clone, Debug)]
@@ -60,6 +90,8 @@ pub struct Configuration {
     pub price: PriceConfiguration,
 
     pub relayers: RelayersConfiguration,
+
+    pub privacy: Option<PrivacyConfiguration>,
 }
 
 impl From<Configuration> for RelayerManagerConfiguration {
@@ -82,6 +114,7 @@ pub struct Client {
 
     max_fee_multiplier: f32,
     provider_fee_multiplier: f32,
+    privacy_fee_multiplier: f32,
 
     estimate_account: StarknetAccount,
     relayers: RelayerManager,
@@ -98,6 +131,11 @@ impl Client {
 
             max_fee_multiplier: configuration.max_fee_multiplier,
             provider_fee_multiplier: 1.0 + configuration.provider_fee_overhead,
+            privacy_fee_multiplier: configuration
+                .privacy
+                .as_ref()
+                .map(|p| 1.0 + p.privacy_fee_overhead)
+                .unwrap_or(1.0),
 
             estimate_account: Starknet::new(&configuration.starknet).initialize_account(&configuration.estimate_account),
             relayers: RelayerManager::new(&configuration.clone().into()),
@@ -258,5 +296,63 @@ mod tests {
         let result = client.apply_provider_fee_multiplier(value);
 
         assert_eq!(result, Felt::from(3350));
+    }
+}
+
+#[cfg(test)]
+mod privacy_config_tests {
+    use starknet::core::types::Felt;
+    use starknet::macros::felt;
+
+    use crate::{PrivacyConfiguration, PrivacyPoolConfiguration};
+
+    mod deserialize {
+        use super::*;
+
+        #[test]
+        fn should_parse_all_fields_when_complete_json() {
+            // Given
+            let json = r#"{
+                "pools": {
+                    "0x1234": {
+                        "pool_address": "0x1234",
+                        "fee_recipient": "0xabcd",
+                        "accepted_gas_tokens": ["0x1111", "0x2222"],
+                        "strk_token_address": "0x4718"
+                    }
+                },
+                "privacy_fee_overhead": 0.5
+            }"#;
+
+            // When
+            let config: PrivacyConfiguration = serde_json::from_str(json).unwrap();
+
+            // Then
+            assert_eq!(config.pools.len(), 1);
+            assert_eq!(config.privacy_fee_overhead, 0.5);
+            let pool = config.pools.get(&Felt::from(0x1234u64)).unwrap();
+            assert_eq!(pool.fee_recipient, Felt::from(0xABCDu64));
+            assert_eq!(pool.accepted_gas_tokens.len(), 2);
+            assert_eq!(pool.strk_token_address, Felt::from(0x4718u64));
+        }
+
+        #[test]
+        fn should_default_strk_address_to_mainnet_when_omitted() {
+            // Given
+            let json = r#"{
+                "pool_address": "0x1234",
+                "fee_recipient": "0xabcd",
+                "accepted_gas_tokens": ["0x1111"]
+            }"#;
+
+            // When
+            let pool: PrivacyPoolConfiguration = serde_json::from_str(json).unwrap();
+
+            // Then
+            assert_eq!(
+                pool.strk_token_address,
+                felt!("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")
+            );
+        }
     }
 }

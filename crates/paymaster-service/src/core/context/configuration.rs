@@ -57,6 +57,9 @@ pub struct Configuration {
     pub starknet: StarknetConfiguration,
     pub price: PriceConfiguration,
     pub sponsoring: SponsoringConfiguration,
+
+    #[serde(default)]
+    pub privacy: Option<paymaster_execution::PrivacyConfiguration>,
 }
 
 impl Configuration {

@@ -95,6 +95,8 @@ impl TestEnvironment {
                     lock: LockLayerConfiguration::mock_with_timeout::<CoordinationLayer>(Duration::from_secs(5)),
                     rebalancing: paymaster_relayer::rebalancing::OptionalRebalancingConfiguration::initialize(None),
                 },
+
+                privacy: None,
             },
 
             starknet,

@@ -26,6 +26,8 @@ pub struct Configuration {
     pub starknet: StarknetConfiguration,
     pub price: PriceConfiguration,
     pub sponsoring: SponsoringConfiguration,
+
+    pub privacy: Option<paymaster_execution::PrivacyConfiguration>,
 }
 
 impl From<Configuration> for paymaster_execution::Configuration {
@@ -41,6 +43,8 @@ impl From<Configuration> for paymaster_execution::Configuration {
             gas_tank: value.gas_tank,
 
             relayers: value.relayers,
+
+            privacy: value.privacy,
         }
     }
 }

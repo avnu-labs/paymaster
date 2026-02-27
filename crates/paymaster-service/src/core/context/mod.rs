@@ -66,6 +66,8 @@ impl Into<paymaster_rpc::Configuration> for Context {
             starknet: self.configuration.starknet.clone(),
             price: self.configuration.clone().into(),
             sponsoring: self.configuration.sponsoring,
+
+            privacy: self.configuration.privacy,
         }
     }
 }
