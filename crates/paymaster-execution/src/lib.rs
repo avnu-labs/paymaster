@@ -10,6 +10,7 @@ use ::starknet::macros::felt;
 pub use execution::*;
 
 pub mod diagnostics;
+pub mod privacy;
 pub mod tokens;
 
 #[cfg(feature = "testing")]
@@ -119,14 +120,16 @@ pub struct Client {
     estimate_account: StarknetAccount,
     relayers: RelayerManager,
 
+    privacy_pool_client: Option<privacy::PrivacyPoolClient>,
+
     pub diagnostic_client: DiagnosticClient,
 }
 
 impl Client {
     /// Creates a new client given a configuration
     pub fn new(configuration: &Configuration) -> Self {
+        let starknet = Starknet::new(&configuration.starknet);
         Self {
-            starknet: Starknet::new(&configuration.starknet),
             price: PriceClient::new(&configuration.price),
 
             max_fee_multiplier: configuration.max_fee_multiplier,
@@ -139,6 +142,13 @@ impl Client {
 
             estimate_account: Starknet::new(&configuration.starknet).initialize_account(&configuration.estimate_account),
             relayers: RelayerManager::new(&configuration.clone().into()),
+
+            privacy_pool_client: configuration
+                .privacy
+                .as_ref()
+                .map(|_| privacy::PrivacyPoolClient::new(starknet.clone(), 128)),
+
+            starknet,
 
             diagnostic_client: DiagnosticClient::new(configuration.starknet.chain_id),
         }
@@ -255,6 +265,10 @@ impl Client {
         let divisor = NonZeroFelt::from_felt_unchecked(Felt::from(1000));
 
         (multiplier * value).floor_div(&divisor)
+    }
+
+    pub fn privacy_pool_client(&self) -> Option<&privacy::PrivacyPoolClient> {
+        self.privacy_pool_client.as_ref()
     }
 
     pub fn get_relayer_manager(&self) -> &RelayerManager {
