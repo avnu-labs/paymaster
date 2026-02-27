@@ -1,6 +1,6 @@
 # avnu Paymaster
 
-Gas abstraction made easy on Starknet — open-source, production-ready, fully extensible.
+Gas abstraction made easy on Starknet - open-source, production-ready, fully extensible.
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Docs](https://img.shields.io/badge/docs-available-green)](https://docs.avnu.fi/docs/paymaster)
@@ -14,23 +14,23 @@ SNIP-29 compliant Paymaster for Starknet.
 > [!TIP]
 > **Just want to integrate? No need to self-host.**
 >
-> avnu operates a managed Paymaster — no infrastructure to run.
-> - **Gasless** (user pays in any token) — no setup required
-> - **Gasfree** (you sponsor gas) — API key via [Portal](https://portal.avnu.fi)
+> avnu operates a production-ready managed Paymaster, trusted by 50+ projects on Starknet.
+> - **Gasless** (user pays in any token) - no setup required
+> - **Gasfree** (you sponsor gas) - API key via [Portal](https://portal.avnu.fi)
 >
-> [Documentation](https://docs.avnu.fi/docs/paymaster) · [Portal](https://portal.avnu.fi) · Endpoints: `starknet.paymaster.avnu.fi` / `sepolia.paymaster.avnu.fi`
+> [Documentation](https://docs.avnu.fi/docs/paymaster) · [Portal](https://portal.avnu.fi)
 
 ## Features
 
-- **Gasless** — Let users pay gas in any ERC-20 (USDC, ETH, ...)
-- **Gasfree** — Sponsor user transactions with flexible logic (API key or webhook)
-- **Fast setup** — Deploy a full Paymaster in 2 minutes with the CLI
-- **Auto-rebalancing** — Swap supported tokens into STRK and refill relayers automatically
-- **Scales effortlessly** — Vertical (more relayers) or horizontal (multi-instance with Redis)
-- **Full observability** — OpenTelemetry metrics, logs and traces out of the box
-- **SNIP-29 compliant** — Integrates with `starknet.js` and `starknet-react`
-- **Extensible by design** — Bring your own price feeds, database, or logic
-- **Audited** — Forwarder contract reviewed by Nethermind
+- **Gasless** -Let users pay gas in any ERC-20 (USDC, ETH, ...)
+- **Gasfree** -Sponsor user transactions with flexible logic (API key or webhook)
+- **Fast setup** -Deploy a full Paymaster in 2 minutes with the CLI
+- **Auto-rebalancing** -Swap supported tokens into STRK and refill relayers automatically
+- **Scales effortlessly** -Vertical (more relayers) or horizontal (multi-instance with Redis)
+- **Full observability** -OpenTelemetry metrics, logs and traces out of the box
+- **SNIP-29 compliant** -Integrates with `starknet.js` and `starknet-react`
+- **Extensible by design** -Bring your own price feeds, database, or logic
+- **Audited** -Forwarder contract reviewed by Nethermind
 
 ## Integrate in your dApp
 
