@@ -85,6 +85,15 @@ pub enum Error {
     #[error("max amount too low")]
     MaxAmountTooLow,
 
+    #[error("privacy pool not configured")]
+    PrivacyPoolNotConfigured,
+
+    #[error("privacy token not accepted")]
+    PrivacyTokenNotAccepted,
+
+    #[error("privacy proof missing")]
+    PrivacyProofMissing,
+
     #[error("{0:?}")]
     Execution(ContractExecutionError),
 }
@@ -134,6 +143,9 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::ClassHashNotSupported => ErrorObject::borrowed(155, "An error occurred (CLASS_HASH_NOT_SUPPORTED)", None),
             Error::InvalidTimeBounds => ErrorObject::borrowed(157, "An error occurred (INVALID_TIME_BOUNDS)", None),
             Error::InvalidDeploymentData => ErrorObject::borrowed(158, "An error occurred (INVALID_DEPLOYMENT_DATA)", None),
+            Error::PrivacyPoolNotConfigured => ErrorObject::borrowed(159, "An error occurred (PRIVACY_POOL_NOT_CONFIGURED)", None),
+            Error::PrivacyTokenNotAccepted => ErrorObject::borrowed(160, "An error occurred (PRIVACY_TOKEN_NOT_ACCEPTED)", None),
+            Error::PrivacyProofMissing => ErrorObject::borrowed(161, "An error occurred (PRIVACY_PROOF_MISSING)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),

@@ -25,6 +25,12 @@ pub enum Error {
 
     #[error("execution error {0}")]
     Execution(String),
+
+    #[error("privacy estimation failed: {0}")]
+    PrivacyEstimationFailed(String),
+
+    #[error("privacy pool fee unavailable")]
+    PrivacyPoolFeeUnavailable,
 }
 
 impl From<paymaster_starknet::Error> for Error {
