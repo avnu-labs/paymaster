@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use std::collections::HashSet;
 
 use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};

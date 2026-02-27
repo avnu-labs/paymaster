@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 mod execution;
 
 use std::cmp::max;

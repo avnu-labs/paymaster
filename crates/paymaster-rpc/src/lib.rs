@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use jsonrpsee::core::Serialize;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObject;

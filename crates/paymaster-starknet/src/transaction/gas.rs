@@ -1,11 +1,10 @@
-use starknet::core::types::{FeeEstimate, Felt, PriceUnit};
+use starknet::core::types::{FeeEstimate, Felt};
 
 use crate::Error;
 
 #[derive(Debug, Clone)]
 pub struct TransactionGasEstimate {
     pub overall_fee: u128,
-    pub unit: PriceUnit,
     tip: u64,
     l1_gas_consumed: u64,
     l1_gas_price: u128,
@@ -28,7 +27,6 @@ impl TransactionGasEstimate {
             l2_gas_consumed: estimate.l2_gas_consumed,
             l1_data_gas_consumed: estimate.l1_data_gas_consumed,
             tip,
-            unit: PriceUnit::Fri,
             gas_estimate_multiplier: 1.5,
             gas_price_estimate_multiplier: 1.5,
         }
@@ -52,7 +50,6 @@ impl TransactionGasEstimate {
             l2_gas_consumed,
             tip: self.tip,
             l1_data_gas_consumed: self.l1_data_gas_consumed,
-            unit: self.unit,
             gas_estimate_multiplier: self.gas_estimate_multiplier,
             gas_price_estimate_multiplier: self.gas_price_estimate_multiplier,
         }

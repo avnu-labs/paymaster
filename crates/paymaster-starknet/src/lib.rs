@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use std::fmt::{Debug, Display};
 
 use serde::{Deserialize, Serialize};
@@ -206,7 +208,7 @@ impl Client {
     /// Fetch the gas price at the latest block. Price is given in wei
     #[instrument(name = "fetch_block_gas_price", skip(self))]
     pub async fn fetch_block_gas_price(&self) -> Result<BlockGasPrice, Error> {
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await));
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_block_with_txs(BlockId::Tag(BlockTag::Latest), None).await));
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "fetch_block_gas_price");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "fetch_block_gas_price");
 
@@ -227,7 +229,7 @@ impl Client {
     /// Fetch the median tip at the latest block
     #[instrument(name = "fetch_block_median_tip", skip(self))]
     pub async fn fetch_block_median_tip(&self) -> Result<u64, Error> {
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await));
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_block_with_txs(BlockId::Tag(BlockTag::Latest), None).await));
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "fetch_block_median_tip");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "fetch_block_median_tip");
         Ok(result?.median_tip())
@@ -323,7 +325,7 @@ impl Client {
     /// Returns the transaction with `hash`
     #[instrument(name = "get_transaction", skip(self))]
     pub async fn get_transaction(&self, hash: Felt) -> Result<Transaction, Error> {
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_transaction_by_hash(hash).await));
+        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_transaction_by_hash(hash, None).await));
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "get_transaction");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "get_transaction");

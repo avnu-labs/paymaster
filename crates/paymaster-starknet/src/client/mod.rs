@@ -7,8 +7,9 @@ use starknet::core::types::{
     BlockHashAndNumber, BlockId, BroadcastedDeclareTransaction, BroadcastedDeployAccountTransaction, BroadcastedInvokeTransaction, BroadcastedTransaction,
     ConfirmedBlockId, ContractClass, ContractStorageKeys, DeclareTransactionResult, DeployAccountTransactionResult, EventFilter, EventsPage, FeeEstimate, Felt,
     FunctionCall, Hash256, InvokeTransactionResult, MaybePreConfirmedBlockWithReceipts, MaybePreConfirmedBlockWithTxHashes, MaybePreConfirmedBlockWithTxs,
-    MaybePreConfirmedStateUpdate, MessageFeeEstimate, MessageStatus, MsgFromL1, SimulatedTransaction, SimulationFlag, SimulationFlagForEstimateFee, StorageProof,
-    SyncStatusType, Transaction, TransactionReceiptWithBlockInfo, TransactionStatus, TransactionTrace, TransactionTraceWithHash,
+    MaybePreConfirmedStateUpdate, MessageFeeEstimate, MessageStatus, MsgFromL1, SimulateTransactionsResult, SimulatedTransaction, SimulationFlag,
+    SimulationFlagForEstimateFee, StorageProof, SyncStatusType, TraceBlockTransactionsResult, TraceFlag, Transaction, TransactionReceiptWithBlockInfo,
+    TransactionResponseFlag, TransactionStatus, TransactionTrace,
 };
 use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClientError};
 use starknet::providers::{JsonRpcClient, Provider, ProviderError, ProviderRequestData, ProviderResponseData, Url};
@@ -95,6 +96,14 @@ impl Provider for StarknetClient {
         call_with_fallback!(self.spec_version())
     }
 
+    #[instrument(name = "starknet_version", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
+    async fn starknet_version<B>(&self, block_id: B) -> Result<String, ProviderError>
+    where
+        B: AsRef<BlockId> + Send + Sync,
+    {
+        call_with_fallback!(self.starknet_version(block_id))
+    }
+
     /// Gets block information with transaction hashes given the block id.
     #[instrument(name = "get_block_with_tx_hashes", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
     async fn get_block_with_tx_hashes<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithTxHashes, ProviderError>
@@ -105,21 +114,21 @@ impl Provider for StarknetClient {
     }
 
     /// Gets block information with full transactions given the block id.
-    #[instrument(name = "get_block_with_txs", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_txs<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithTxs, ProviderError>
+    #[instrument(name = "get_block_with_txs", skip(self, block_id, response_flags), fields(block_id = ?block_id.as_ref()))]
+    async fn get_block_with_txs<B>(&self, block_id: B, response_flags: Option<&[TransactionResponseFlag]>) -> Result<MaybePreConfirmedBlockWithTxs, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
-        call_with_fallback!(self.get_block_with_txs(block_id))
+        call_with_fallback!(self.get_block_with_txs(block_id, response_flags))
     }
 
     /// Gets block information with full transactions and receipts given the block id.
-    #[instrument(name = "get_block_with_receipts", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_block_with_receipts<B>(&self, block_id: B) -> Result<MaybePreConfirmedBlockWithReceipts, ProviderError>
+    #[instrument(name = "get_block_with_receipts", skip(self, block_id, response_flags), fields(block_id = ?block_id.as_ref()))]
+    async fn get_block_with_receipts<B>(&self, block_id: B, response_flags: Option<&[TransactionResponseFlag]>) -> Result<MaybePreConfirmedBlockWithReceipts, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
-        call_with_fallback!(self.get_block_with_receipts(block_id))
+        call_with_fallback!(self.get_block_with_receipts(block_id, response_flags))
     }
 
     /// Gets the information about the result of executing the requested block.
@@ -158,21 +167,21 @@ impl Provider for StarknetClient {
     }
 
     /// Gets the details and status of a submitted transaction.
-    #[instrument(name = "get_transaction_by_hash", skip(self, transaction_hash), fields(transaction_hash = ?transaction_hash.as_ref()))]
-    async fn get_transaction_by_hash<H>(&self, transaction_hash: H) -> Result<Transaction, ProviderError>
+    #[instrument(name = "get_transaction_by_hash", skip(self, transaction_hash, response_flags), fields(transaction_hash = ?transaction_hash.as_ref()))]
+    async fn get_transaction_by_hash<H>(&self, transaction_hash: H, response_flags: Option<&[TransactionResponseFlag]>) -> Result<Transaction, ProviderError>
     where
         H: AsRef<Felt> + Send + Sync,
     {
-        call_with_fallback!(self.get_transaction_by_hash(transaction_hash))
+        call_with_fallback!(self.get_transaction_by_hash(transaction_hash, response_flags))
     }
 
     /// Gets the details of a transaction by a given block id and index.
-    #[instrument(name = "get_transaction_by_block_id_and_index", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn get_transaction_by_block_id_and_index<B>(&self, block_id: B, index: u64) -> Result<Transaction, ProviderError>
+    #[instrument(name = "get_transaction_by_block_id_and_index", skip(self, block_id, response_flags), fields(block_id = ?block_id.as_ref()))]
+    async fn get_transaction_by_block_id_and_index<B>(&self, block_id: B, index: u64, response_flags: Option<&[TransactionResponseFlag]>) -> Result<Transaction, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
     {
-        call_with_fallback!(self.get_transaction_by_block_id_and_index(block_id, index))
+        call_with_fallback!(self.get_transaction_by_block_id_and_index(block_id, index, response_flags))
     }
 
     /// Gets the details of a transaction by a given block number and index.
@@ -351,7 +360,7 @@ impl Provider for StarknetClient {
     /// property in the trace. Other types of failures (e.g. unexpected error or failure in the
     /// validation phase) will result in `TRANSACTION_EXECUTION_ERROR`.
     #[instrument(name = "simulate_transactions", skip(self, block_id, transactions, simulation_flags), fields(block_id = ?block_id.as_ref(), transactions = ?transactions.as_ref(), simulation_flags = ?simulation_flags.as_ref()))]
-    async fn simulate_transactions<B, T, S>(&self, block_id: B, transactions: T, simulation_flags: S) -> Result<Vec<SimulatedTransaction>, ProviderError>
+    async fn simulate_transactions<B, T, S>(&self, block_id: B, transactions: T, simulation_flags: S) -> Result<SimulateTransactionsResult, ProviderError>
     where
         B: AsRef<BlockId> + Send + Sync,
         T: AsRef<[BroadcastedTransaction]> + Send + Sync,
@@ -361,12 +370,12 @@ impl Provider for StarknetClient {
     }
 
     /// Retrieves traces for all transactions in the given block.
-    #[instrument(name = "trace_block_transactions", skip(self, block_id), fields(block_id = ?block_id.as_ref()))]
-    async fn trace_block_transactions<B>(&self, block_id: B) -> Result<Vec<TransactionTraceWithHash>, ProviderError>
+    #[instrument(name = "trace_block_transactions", skip(self, block_id, trace_flags), fields(block_id = ?block_id.as_ref()))]
+    async fn trace_block_transactions<B>(&self, block_id: B, trace_flags: Option<&[TraceFlag]>) -> Result<TraceBlockTransactionsResult, ProviderError>
     where
         B: AsRef<ConfirmedBlockId> + Send + Sync,
     {
-        call_with_fallback!(self.trace_block_transactions(block_id))
+        call_with_fallback!(self.trace_block_transactions(block_id, trace_flags))
     }
 
     /// Sends multiple requests in parallel. The function call fails if any of the requests fails.

@@ -3,8 +3,8 @@ use std::ops::Deref;
 use serde::{Deserialize, Serialize};
 use starknet::accounts::{Account, AccountError, ConnectedAccount};
 use starknet::core::types::{
-    BlockId, BlockTag, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult, ResourceBounds,
-    ResourceBoundsMapping,
+    BlockId, BlockTag, BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt,
+    InvokeTransactionResult, ResourceBounds, ResourceBoundsMapping,
 };
 use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
@@ -57,7 +57,7 @@ impl Calls {
     pub async fn estimate(&self, account: &StarknetAccount, tip: Option<u64>) -> Result<EstimatedCalls, Error> {
         let tip = match tip {
             None => {
-                let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await?;
+                let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest), None).await?;
                 block.median_tip()
             },
             Some(tip) => tip,
@@ -83,32 +83,35 @@ impl Calls {
     }
 
     pub fn as_transaction(&self, sender: Felt, nonce: Felt, tip: u64) -> BroadcastedTransaction {
-        BroadcastedTransaction::Invoke(BroadcastedInvokeTransactionV3 {
-            sender_address: sender,
-            calldata: CalldataBuilder::new().encode(&self.0).build(),
-
-            signature: vec![],
-            nonce,
-            resource_bounds: ResourceBoundsMapping {
-                l1_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
+        BroadcastedTransaction::Invoke(BroadcastedInvokeTransaction {
+            broadcasted_invoke_txn_v3: BroadcastedInvokeTransactionV3 {
+                sender_address: sender,
+                calldata: CalldataBuilder::new().encode(&self.0).build(),
+                signature: vec![],
+                nonce,
+                resource_bounds: ResourceBoundsMapping {
+                    l1_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l1_data_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l2_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
                 },
-                l1_data_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
-                l2_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
+                tip,
+                paymaster_data: vec![],
+                account_deployment_data: vec![],
+                nonce_data_availability_mode: DataAvailabilityMode::L1,
+                fee_data_availability_mode: DataAvailabilityMode::L1,
+                proof_facts: None,
+                is_query: true,
             },
-            tip,
-            paymaster_data: vec![],
-            account_deployment_data: vec![],
-            nonce_data_availability_mode: DataAvailabilityMode::L1,
-            fee_data_availability_mode: DataAvailabilityMode::L1,
-            is_query: true,
+            proof: None,
         })
     }
 

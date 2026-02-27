@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use std::collections::HashMap;
 
 use paymaster_common::{measure_duration, metric};
