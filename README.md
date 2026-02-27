@@ -11,9 +11,14 @@ Gas abstraction made easy on Starknet — open-source, production-ready, fully e
 Sponsor gas fees, accept any token, and control every detail of the gas experience.
 SNIP-29 compliant Paymaster for Starknet.
 
-> **Just want to integrate?** avnu operates a managed Paymaster — no infrastructure to run.
-> Two modes: **Gasless** (user pays in any token, no setup) · **Gasfree** (you sponsor gas, requires API key).
-> [Documentation](https://docs.avnu.fi/docs/paymaster) · [Portal — get an API key](https://portal.avnu.fi) · Endpoints: `starknet.paymaster.avnu.fi` / `sepolia.paymaster.avnu.fi`
+> [!TIP]
+> **Just want to integrate? No need to self-host.**
+>
+> avnu operates a managed Paymaster — no infrastructure to run.
+> - **Gasless** (user pays in any token) — no setup required
+> - **Gasfree** (you sponsor gas) — API key via [Portal](https://portal.avnu.fi)
+>
+> [Documentation](https://docs.avnu.fi/docs/paymaster) · [Portal](https://portal.avnu.fi) · Endpoints: `starknet.paymaster.avnu.fi` / `sepolia.paymaster.avnu.fi`
 
 ## Features
 
