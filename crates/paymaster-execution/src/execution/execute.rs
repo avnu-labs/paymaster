@@ -1,5 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
-use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, SequentialCalldataDecoder, TokenTransfer};
+use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, PrivateProofData, SequentialCalldataDecoder, TokenTransfer};
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
@@ -8,6 +8,13 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use crate::execution::deploy::DeploymentParameters;
 use crate::execution::ExecutionParameters;
 use crate::{Client, Error};
+
+#[derive(Debug, Hash)]
+pub struct ExecutablePrivateInvokeParameters {
+    pub pool_address: Felt,
+    pub calldata: Vec<Felt>,
+    pub proof_data: PrivateProofData,
+}
 
 #[derive(Debug, Hash)]
 pub enum ExecutableTransactionParameters {
@@ -24,6 +31,9 @@ pub enum ExecutableTransactionParameters {
     DirectInvoke {
         invoke: ExecutableDirectInvokeParameters,
     },
+    PrivateInvoke {
+        private_invoke: ExecutablePrivateInvokeParameters,
+    },
 }
 
 impl ExecutableTransactionParameters {
@@ -33,6 +43,12 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DirectInvoke { invoke } => invoke.get_unique_indentifier(),
+            ExecutableTransactionParameters::PrivateInvoke { private_invoke } => {
+                let mut hasher = DefaultHasher::new();
+                private_invoke.pool_address.hash(&mut hasher);
+                private_invoke.calldata.hash(&mut hasher);
+                hasher.finish()
+            },
         }
     }
 }
@@ -198,6 +214,7 @@ impl ExecutableTransaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DirectInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
+            ExecutableTransactionParameters::PrivateInvoke { .. } => unreachable!("PrivateInvoke is handled separately"),
         }
     }
 
@@ -274,7 +291,7 @@ pub struct EstimatedExecutableTransaction(EstimatedCalls);
 
 impl EstimatedExecutableTransaction {
     pub async fn execute(self, client: &Client) -> Result<InvokeTransactionResult, Error> {
-        let result = client.execute(&self.0).await?;
+        let result = client.execute(&self.0, None).await?;
 
         Ok(result)
     }

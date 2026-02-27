@@ -21,7 +21,7 @@ pub use endpoint::build::{
     PrivateInvokeParameters, PrivateInvokeTransaction, TransactionParameters,
 };
 pub use endpoint::common::{DeploymentParameters, ExecutionParameters, FeeMode, TimeBounds};
-pub use endpoint::execute::{ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteRequest, ExecuteResponse};
+pub use endpoint::execute::{ExecutableInvokeParameters, ExecutablePrivateInvokeParameters, ExecutableTransactionParameters, ExecuteRequest, ExecuteResponse};
 pub use endpoint::token::TokenPrice;
 
 mod middleware;

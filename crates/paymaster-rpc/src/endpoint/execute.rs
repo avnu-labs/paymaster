@@ -1,9 +1,11 @@
 use paymaster_execution::ExecutableTransaction;
+use paymaster_starknet::transaction::{Calls, PrivateProofData};
 use paymaster_starknet::Signature;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::core::serde::unsigned_field_element::UfeHex;
-use starknet::core::types::{Felt, TypedData};
+use starknet::core::types::{Call, Felt, TypedData};
+use starknet::macros::selector;
 
 use crate::endpoint::common::{DeploymentParameters, ExecutionParameters};
 use crate::endpoint::validation::check_service_is_available;
@@ -29,6 +31,9 @@ pub enum ExecutableTransactionParameters {
         deployment: DeploymentParameters,
         invoke: ExecutableInvokeParameters,
     },
+    PrivateInvoke {
+        private_invoke: ExecutablePrivateInvokeParameters,
+    },
 }
 
 impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
@@ -41,6 +46,21 @@ impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::Executabl
             ExecutableTransactionParameters::DeployAndInvoke { deployment, invoke } => Self::DeployAndInvoke {
                 deployment: deployment.into(),
                 invoke: invoke.try_into()?,
+            },
+            ExecutableTransactionParameters::PrivateInvoke { private_invoke } => {
+                if private_invoke.proof.is_empty() || private_invoke.proof_facts.is_empty() {
+                    return Err(Error::PrivacyProofMissing);
+                }
+                Self::PrivateInvoke {
+                    private_invoke: paymaster_execution::ExecutablePrivateInvokeParameters {
+                        pool_address: private_invoke.pool_address,
+                        calldata: private_invoke.calldata,
+                        proof_data: PrivateProofData {
+                            proof: private_invoke.proof,
+                            proof_facts: private_invoke.proof_facts,
+                        },
+                    },
+                }
             },
         })
     }
@@ -69,6 +89,21 @@ impl TryFrom<ExecutableInvokeParameters> for paymaster_execution::ExecutableInvo
 }
 
 #[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct ExecutablePrivateInvokeParameters {
+    #[serde_as(as = "UfeHex")]
+    pub pool_address: Felt,
+
+    #[serde_as(as = "Vec<UfeHex>")]
+    pub calldata: Vec<Felt>,
+
+    pub proof: Vec<u64>,
+
+    #[serde_as(as = "Vec<UfeHex>")]
+    pub proof_facts: Vec<Felt>,
+}
+
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExecuteResponse {
     #[serde_as(as = "UfeHex")]
@@ -81,28 +116,73 @@ pub struct ExecuteResponse {
 pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest) -> Result<ExecuteResponse, Error> {
     check_service_is_available(ctx).await?;
 
-    let forwarder = ctx.configuration.forwarder;
-    let gas_tank_address = ctx.configuration.gas_tank.address;
+    let execution_params: paymaster_execution::ExecutionParameters = request.parameters.into();
+    let transaction_params: paymaster_execution::ExecutableTransactionParameters = request.transaction.try_into()?;
+    ctx.transaction_filter.filter(&transaction_params)?;
 
-    let transaction = ExecutableTransaction {
-        forwarder,
-        gas_tank_address,
-        parameters: request.parameters.into(),
-        transaction: request.transaction.try_into()?,
+    match transaction_params {
+        paymaster_execution::ExecutableTransactionParameters::PrivateInvoke { private_invoke } => execute_private_invoke(ctx, private_invoke, execution_params).await,
+        _ => {
+            let transaction = ExecutableTransaction {
+                forwarder: ctx.configuration.forwarder,
+                gas_tank_address: ctx.configuration.gas_tank.address,
+                parameters: execution_params,
+                transaction: transaction_params,
+            };
+
+            let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
+                let authenticated_api_key = ctx.validate_api_key().await?;
+                transaction
+                    .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
+                    .await?
+            } else {
+                transaction.estimate_transaction(&ctx.execution).await?
+            };
+
+            let result = estimated_transaction.execute(&ctx.execution).await?;
+
+            Ok(ExecuteResponse {
+                transaction_hash: result.transaction_hash,
+                tracking_id: Felt::ZERO,
+            })
+        },
+    }
+}
+
+async fn execute_private_invoke(
+    ctx: &RequestContext<'_>,
+    params: paymaster_execution::ExecutablePrivateInvokeParameters,
+    execution_params: paymaster_execution::ExecutionParameters,
+) -> Result<ExecuteResponse, Error> {
+    let privacy_config = ctx.configuration.privacy.as_ref().ok_or(Error::PrivacyPoolNotConfigured)?;
+    let pool_config = privacy_config
+        .pools
+        .get(&params.pool_address)
+        .ok_or(Error::PrivacyPoolNotConfigured)?;
+
+    let pool_fee = ctx
+        .execution
+        .privacy_pool_client()
+        .ok_or(Error::PrivacyPoolNotConfigured)?
+        .get_fee_amount(params.pool_address)
+        .await
+        .map_err(|_| Error::PrivacyPoolNotConfigured)?;
+
+    // Build calls: [approve(STRK, pool, pool_fee), pool.apply_actions(calldata)]
+    let approve_call = Call {
+        to: pool_config.strk_token_address,
+        selector: selector!("approve"),
+        calldata: vec![params.pool_address, Felt::from(pool_fee), Felt::ZERO],
     };
-
-    ctx.transaction_filter.filter(&transaction.transaction)?;
-
-    let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
-        let authenticated_api_key = ctx.validate_api_key().await?;
-        transaction
-            .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
-            .await?
-    } else {
-        transaction.estimate_transaction(&ctx.execution).await?
+    let apply_actions_call = Call {
+        to: params.pool_address,
+        selector: selector!("apply_actions"),
+        calldata: params.calldata,
     };
+    let calls = Calls::new(vec![approve_call, apply_actions_call]);
 
-    let result = estimated_transaction.execute(&ctx.execution).await?;
+    let estimated_calls = ctx.execution.estimate_with_proof(&calls, execution_params.tip(), &params.proof_data).await?;
+    let result = ctx.execution.execute(&estimated_calls, Some(&params.proof_data)).await?;
 
     Ok(ExecuteResponse {
         transaction_hash: result.transaction_hash,

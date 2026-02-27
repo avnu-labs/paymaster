@@ -24,7 +24,7 @@ pub use error::Error;
 use paymaster_common::{measure_duration, metric};
 use paymaster_prices::{Client as PriceClient, PriceConfiguration};
 use paymaster_relayer::{LockedRelayer, RelayerManager, RelayerManagerConfiguration, RelayersConfiguration};
-use paymaster_starknet::transaction::{Calls, EstimatedCalls};
+use paymaster_starknet::transaction::{Calls, EstimatedCalls, PrivateProofData};
 use paymaster_starknet::{Configuration as StarknetConfiguration, ContractAddress, StarknetAccount, StarknetAccountConfiguration};
 use thiserror::Error;
 mod filter;
@@ -155,10 +155,10 @@ impl Client {
     }
 
     /// Execute the calls after they have been estimated. See method [`estimate`]
-    pub async fn execute(&self, calls: &EstimatedCalls) -> Result<InvokeTransactionResult, Error> {
+    pub async fn execute(&self, calls: &EstimatedCalls, proof_data: Option<&PrivateProofData>) -> Result<InvokeTransactionResult, Error> {
         let mut relayer = self.relayers.lock_relayer().await?;
 
-        let (result, duration) = measure_duration!(self.execute_with_retries(&mut relayer, calls, 3).await);
+        let (result, duration) = measure_duration!(self.execute_with_retries(&mut relayer, calls, 3, proof_data).await);
         metric!(counter[execution_request] = 1, method = "execute");
         metric!(histogram[execution_request_duration_milliseconds] = duration.as_millis(), method = "execute");
 
@@ -186,9 +186,15 @@ impl Client {
     // Execute the transaction at most n times in the case where it fails because of an invalid nonce.
     // Note that if the transaction fails for a differant reason than an invalid nonce, this function returns the
     // error.
-    async fn execute_with_retries(&self, relayer: &mut LockedRelayer, calls: &EstimatedCalls, n_retries: usize) -> Result<InvokeTransactionResult, Error> {
+    async fn execute_with_retries(
+        &self,
+        relayer: &mut LockedRelayer,
+        calls: &EstimatedCalls,
+        n_retries: usize,
+        proof_data: Option<&PrivateProofData>,
+    ) -> Result<InvokeTransactionResult, Error> {
         for _ in 0..n_retries {
-            match relayer.execute(calls).await {
+            match relayer.execute(calls, proof_data).await {
                 Ok(result) => return Ok(result),
                 Err(paymaster_relayer::Error::InvalidNonce) => {},
                 Err(e) => return Err(Error::Execution(e.to_string())),
@@ -202,6 +208,14 @@ impl Client {
     pub async fn estimate(&self, calls: &Calls, tip: TipPriority) -> Result<EstimatedCalls, Error> {
         let tip = self.get_tip(tip).await?;
         let result = calls.estimate(&self.estimate_account, Some(tip)).await?;
+
+        Ok(result)
+    }
+
+    /// Estimate the gas cost with proof data for privacy transactions
+    pub async fn estimate_with_proof(&self, calls: &Calls, tip: TipPriority, proof_data: &PrivateProofData) -> Result<EstimatedCalls, Error> {
+        let tip = self.get_tip(tip).await?;
+        let result = calls.estimate_with_proof(&self.estimate_account, Some(tip), proof_data).await?;
 
         Ok(result)
     }
@@ -370,10 +384,7 @@ mod privacy_config_tests {
             let pool: PrivacyPoolConfiguration = serde_json::from_str(json).unwrap();
 
             // Then
-            assert_eq!(
-                pool.strk_token_address,
-                felt!("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")
-            );
+            assert_eq!(pool.strk_token_address, felt!("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"));
         }
     }
 }

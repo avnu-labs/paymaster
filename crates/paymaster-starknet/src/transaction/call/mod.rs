@@ -3,14 +3,14 @@ use std::ops::Deref;
 use serde::{Deserialize, Serialize};
 use starknet::accounts::{Account, AccountError, ConnectedAccount};
 use starknet::core::types::{
-    BlockId, BlockTag, BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt,
-    InvokeTransactionResult, ResourceBounds, ResourceBoundsMapping,
+    BlockId, BlockTag, BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult,
+    ResourceBounds, ResourceBoundsMapping,
 };
 use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
 use tracing::error;
 
-use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TimeBounds, TransactionGasEstimate};
+use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, PrivateProofData, TimeBounds, TransactionGasEstimate};
 use crate::{ChainID, Error, StarknetAccount};
 
 mod calldata;
@@ -57,13 +57,39 @@ impl Calls {
     pub async fn estimate(&self, account: &StarknetAccount, tip: Option<u64>) -> Result<EstimatedCalls, Error> {
         let tip = match tip {
             None => {
-                let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest), None).await?;
+                let block = account
+                    .provider()
+                    .get_block_with_txs(BlockId::Tag(BlockTag::Latest), None)
+                    .await?;
                 block.median_tip()
             },
             Some(tip) => tip,
         };
 
         let result = account.execute_v3(self.to_vec()).tip(tip).estimate_fee().await?;
+
+        Ok(self.clone().with_estimate(TransactionGasEstimate::new(result, tip)))
+    }
+
+    pub async fn estimate_with_proof(&self, account: &StarknetAccount, tip: Option<u64>, proof_data: &PrivateProofData) -> Result<EstimatedCalls, Error> {
+        let tip = match tip {
+            None => {
+                let block = account
+                    .provider()
+                    .get_block_with_txs(BlockId::Tag(BlockTag::Latest), None)
+                    .await?;
+                block.median_tip()
+            },
+            Some(tip) => tip,
+        };
+
+        let result = account
+            .execute_v3(self.to_vec())
+            .tip(tip)
+            .proof_facts(proof_data.proof_facts.clone())
+            .proof(proof_data.proof.clone())
+            .estimate_fee()
+            .await?;
 
         Ok(self.clone().with_estimate(TransactionGasEstimate::new(result, tip)))
     }
@@ -164,6 +190,43 @@ impl EstimatedCalls {
             .l1_data_gas(self.estimate.l1_data_gas_consumed())
             .l1_data_gas_price(self.estimate.l1_data_gas_price()?)
             .tip(self.estimate.tip())
+            .send()
+            .await;
+
+        match &result {
+            Err(AccountError::Provider(e @ ProviderError::RateLimited)) => {
+                error!("{}", e);
+            },
+            Err(AccountError::Provider(e @ ProviderError::ArrayLengthMismatch)) => {
+                error!("{}", e);
+            },
+            Err(AccountError::Provider(ProviderError::Other(error))) => {
+                error!("{}", error);
+            },
+            _ => {},
+        };
+
+        Ok(result?)
+    }
+
+    pub async fn execute_with_proof(
+        &self,
+        account: &StarknetAccount,
+        nonce: Felt,
+        proof_data: &PrivateProofData,
+    ) -> Result<InvokeTransactionResult, Error> {
+        let result = account
+            .execute_v3(self.calls.to_vec())
+            .nonce(nonce)
+            .l1_gas(self.estimate.l1_gas_consumed())
+            .l1_gas_price(self.estimate.l1_gas_price()?)
+            .l2_gas(self.estimate.l2_gas_consumed())
+            .l2_gas_price(self.estimate.l2_gas_price()?)
+            .l1_data_gas(self.estimate.l1_data_gas_consumed())
+            .l1_data_gas_price(self.estimate.l1_data_gas_price()?)
+            .tip(self.estimate.tip())
+            .proof_facts(proof_data.proof_facts.clone())
+            .proof(proof_data.proof.clone())
             .send()
             .await;
 

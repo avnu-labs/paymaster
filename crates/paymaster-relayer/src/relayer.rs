@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use paymaster_common::cache::ExpirableCache;
 use paymaster_common::{declare_message_identity, metric};
-use paymaster_starknet::transaction::EstimatedCalls;
+use paymaster_starknet::transaction::{EstimatedCalls, PrivateProofData};
 use paymaster_starknet::{Client, StarknetAccount, StarknetAccountConfiguration};
 use starknet::accounts::{Account, ConnectedAccount};
 use starknet::core::types::{BlockId, BlockTag, Felt, InvokeTransactionResult};
@@ -90,7 +90,7 @@ impl LockedRelayer {
         (self.relayer, self.lock)
     }
 
-    pub async fn execute(&mut self, calls: &EstimatedCalls) -> Result<InvokeTransactionResult, Error> {
+    pub async fn execute(&mut self, calls: &EstimatedCalls, proof_data: Option<&PrivateProofData>) -> Result<InvokeTransactionResult, Error> {
         metric!(counter[relayer_request] = 1, method = "execute");
 
         if self.lock.is_expired() {
@@ -100,7 +100,10 @@ impl LockedRelayer {
         }
 
         let nonce = self.get_nonce().await?;
-        let result = calls.execute(&self.relayer.account, nonce).await;
+        let result = match proof_data {
+            Some(proof) => calls.execute_with_proof(&self.relayer.account, nonce, proof).await,
+            None => calls.execute(&self.relayer.account, nonce).await,
+        };
 
         match result {
             Ok(value) => {

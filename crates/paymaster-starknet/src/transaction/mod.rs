@@ -22,7 +22,7 @@ pub use version::{PaymasterVersion, SupportedVersion};
 
 use crate::{ChainID, Error, Signature};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct PrivateProofData {
     pub proof: Vec<u64>,
     pub proof_facts: Vec<Felt>,
