@@ -41,6 +41,9 @@ use crate::contract::ContractClass;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+#[cfg(test)]
+mod privacy_integration;
+
 mod client;
 
 pub const DEFAULT_SEPOLIA_RPC_ENDPOINT: &str = "https://rpc.starknet-testnet.lava.build/rpc/v0_9";
