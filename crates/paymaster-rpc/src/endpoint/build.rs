@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use jsonrpsee::core::Serialize;
+use paymaster_execution::privacy::types::{generate_non_zero_random_felt, insert_withdraw_action, ClientAction, WithdrawInput};
 use paymaster_execution::Transaction;
+use paymaster_prices::math::convert_strk_to_token;
 use paymaster_starknet::transaction::Calls;
 use serde::Deserialize;
 use starknet::core::types::{Call, Felt, TypedData};
@@ -24,6 +26,7 @@ pub enum TransactionParameters {
     Deploy { deployment: DeploymentParameters },
     Invoke { invoke: InvokeParameters },
     DeployAndInvoke { deployment: DeploymentParameters, invoke: InvokeParameters },
+    PrivateInvoke { private_invoke: PrivateInvokeParameters },
 }
 
 impl From<TransactionParameters> for paymaster_execution::TransactionParameters {
@@ -35,6 +38,13 @@ impl From<TransactionParameters> for paymaster_execution::TransactionParameters 
                 deployment: deployment.into(),
                 invoke: invoke.into(),
             },
+            TransactionParameters::PrivateInvoke { private_invoke } => Self::PrivateInvoke {
+                private_invoke: paymaster_execution::PrivateInvokeParameters {
+                    user_address: private_invoke.user_address,
+                    pool_address: private_invoke.pool_address,
+                    actions: private_invoke.actions,
+                },
+            },
         }
     }
 }
@@ -45,8 +55,16 @@ impl TransactionParameters {
             Self::Deploy { .. } => &[],
             Self::Invoke { invoke } => &invoke.calls,
             Self::DeployAndInvoke { invoke, .. } => &invoke.calls,
+            Self::PrivateInvoke { .. } => &[],
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PrivateInvokeParameters {
+    pub user_address: Felt,
+    pub pool_address: Felt,
+    pub actions: Vec<ClientAction>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -70,6 +88,7 @@ pub enum BuildTransactionResponse {
     Deploy(DeployTransaction),
     Invoke(InvokeTransaction),
     DeployAndInvoke(DeployAndInvokeTransaction),
+    PrivateInvoke(PrivateInvokeTransaction),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -112,6 +131,18 @@ impl From<DeployAndInvokeTransaction> for BuildTransactionResponse {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PrivateInvokeTransaction {
+    pub actions: Vec<ClientAction>,
+    pub fee: FeeEstimate,
+}
+
+impl From<PrivateInvokeTransaction> for BuildTransactionResponse {
+    fn from(value: PrivateInvokeTransaction) -> Self {
+        Self::PrivateInvoke(value)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeeEstimate {
     pub gas_token_price_in_strk: Felt,
@@ -138,6 +169,13 @@ impl From<paymaster_execution::FeeEstimate> for FeeEstimate {
 pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
     check_service_is_available(ctx).await?;
     check_is_allowed_fee_mode(ctx, &request.parameters).await?;
+
+    match &request.transaction {
+        TransactionParameters::PrivateInvoke { private_invoke } => {
+            return build_private_invoke(ctx, private_invoke.clone(), &request.parameters).await;
+        },
+        _ => {},
+    }
 
     // Do preliminary checks
     check_no_blacklisted_call(&request.transaction, &HashSet::new())?;
@@ -205,7 +243,63 @@ async fn build_transaction(ctx: &Context, request: BuildTransactionRequest) -> R
             fee: versioned_transaction.fee_estimate.into(),
         }
         .into(),
+        paymaster_execution::TransactionParameters::PrivateInvoke { .. } => unreachable!("PrivateInvoke is handled separately"),
     })
+}
+
+async fn build_private_invoke(
+    ctx: &Context,
+    params: PrivateInvokeParameters,
+    execution_params: &ExecutionParameters,
+) -> Result<BuildTransactionResponse, Error> {
+    let privacy_config = ctx.configuration.privacy.as_ref().ok_or(Error::PrivacyPoolNotConfigured)?;
+    let pool_config = privacy_config.pools.get(&params.pool_address).ok_or(Error::PrivacyPoolNotConfigured)?;
+
+    let gas_token = execution_params.gas_token();
+    if !execution_params.fee_mode().is_sponsored() && !pool_config.accepted_gas_tokens.contains(&gas_token) {
+        return Err(Error::PrivacyTokenNotAccepted);
+    }
+
+    let pool_fee_in_strk = Felt::from(
+        ctx.execution
+            .privacy_pool_client()
+            .ok_or(Error::PrivacyPoolNotConfigured)?
+            .get_fee_amount(params.pool_address)
+            .await
+            .map_err(|_| Error::PrivacyPoolNotConfigured)?,
+    );
+
+    // TODO: estimate gas cost via simulation or resource constants
+    let gas_estimate_in_strk = Felt::ZERO;
+
+    // Total fee = (pool_fee + gas_estimate) * privacy_overhead
+    let total_fee_in_strk = ctx.execution.apply_privacy_fee_multiplier(pool_fee_in_strk + gas_estimate_in_strk);
+
+    let token = ctx.execution.price.fetch_token(gas_token).await?;
+    let total_fee_in_gas_token = convert_strk_to_token(&token, total_fee_in_strk, true)?;
+
+    let mut actions = params.actions;
+    if !execution_params.fee_mode().is_sponsored() {
+        let withdraw = ClientAction::Withdraw(WithdrawInput {
+            to_addr: pool_config.fee_recipient,
+            token: gas_token,
+            amount: total_fee_in_gas_token,
+            random: generate_non_zero_random_felt(),
+        });
+        insert_withdraw_action(&mut actions, withdraw);
+    }
+
+    Ok(PrivateInvokeTransaction {
+        actions,
+        fee: FeeEstimate {
+            gas_token_price_in_strk: token.price_in_strk,
+            estimated_fee_in_strk: total_fee_in_strk,
+            estimated_fee_in_gas_token: total_fee_in_gas_token,
+            suggested_max_fee_in_strk: total_fee_in_strk,
+            suggested_max_fee_in_gas_token: total_fee_in_gas_token,
+        },
+    }
+    .into())
 }
 
 #[cfg(test)]

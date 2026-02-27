@@ -267,6 +267,13 @@ impl Client {
         (multiplier * value).floor_div(&divisor)
     }
 
+    pub fn apply_privacy_fee_multiplier(&self, value: Felt) -> Felt {
+        let multiplier = Felt::from((self.privacy_fee_multiplier * 1000.0) as u32);
+        let divisor = NonZeroFelt::from_felt_unchecked(Felt::from(1000));
+
+        (multiplier * value).floor_div(&divisor)
+    }
+
     pub fn privacy_pool_client(&self) -> Option<&privacy::PrivacyPoolClient> {
         self.privacy_pool_client.as_ref()
     }

@@ -9,6 +9,7 @@ use crate::diagnostics::DiagnosticClient;
 use crate::execution::deploy::DeploymentParameters;
 use crate::execution::fee::FeeEstimate;
 use crate::execution::ExecutionParameters;
+use crate::privacy::types::ClientAction;
 use crate::{Client, Error};
 
 /// Paymaster transaction parameters to be used for building an executable transaction.
@@ -24,6 +25,14 @@ pub enum TransactionParameters {
     Deploy { deployment: DeploymentParameters },
     Invoke { invoke: InvokeParameters },
     DeployAndInvoke { deployment: DeploymentParameters, invoke: InvokeParameters },
+    PrivateInvoke { private_invoke: PrivateInvokeParameters },
+}
+
+#[derive(Debug, Clone)]
+pub struct PrivateInvokeParameters {
+    pub user_address: Felt,
+    pub pool_address: Felt,
+    pub actions: Vec<ClientAction>,
 }
 
 impl TransactionParameters {
@@ -35,6 +44,7 @@ impl TransactionParameters {
             TransactionParameters::Deploy { .. } => Calls::new(vec![]),
             TransactionParameters::Invoke { invoke } => invoke.calls.clone(),
             TransactionParameters::DeployAndInvoke { invoke, .. } => invoke.calls.clone(),
+            TransactionParameters::PrivateInvoke { .. } => Calls::new(vec![]),
         }
     }
 
@@ -43,6 +53,7 @@ impl TransactionParameters {
             TransactionParameters::Deploy { deployment } => deployment.address,
             TransactionParameters::Invoke { invoke } => invoke.user_address,
             TransactionParameters::DeployAndInvoke { invoke, .. } => invoke.user_address,
+            TransactionParameters::PrivateInvoke { private_invoke } => private_invoke.user_address,
         }
     }
 }
@@ -123,6 +134,8 @@ impl Transaction {
 
             TransactionParameters::DeployAndInvoke { invoke, .. } if invoke.calls.is_empty() => Err(Error::NoCalls),
             TransactionParameters::DeployAndInvoke { .. } => Ok(()),
+
+            TransactionParameters::PrivateInvoke { .. } => Ok(()),
         }
     }
 
@@ -140,6 +153,11 @@ impl Transaction {
             TransactionParameters::DeployAndInvoke { invoke, .. } => {
                 client
                     .compute_max_fee_with_overhead_in_strk(invoke.user_address, base_estimate)
+                    .await
+            },
+            TransactionParameters::PrivateInvoke { private_invoke } => {
+                client
+                    .compute_max_fee_with_overhead_in_strk(private_invoke.user_address, base_estimate)
                     .await
             },
         }
@@ -185,6 +203,7 @@ impl Transaction {
 
                 vec![deploy_tx, invoke_tx]
             },
+            TransactionParameters::PrivateInvoke { .. } => vec![],
         })
     }
 
@@ -243,6 +262,7 @@ impl EstimatedTransaction {
             TransactionParameters::DeployAndInvoke { invoke, .. } => {
                 client.starknet.resolve_paymaster_version_from_account(invoke.user_address).await?
             },
+            TransactionParameters::PrivateInvoke { .. } => PaymasterVersion::V2,
         };
 
         Ok(VersionedTransaction {

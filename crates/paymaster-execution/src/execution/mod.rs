@@ -1,5 +1,5 @@
 mod build;
-pub use build::{EstimatedTransaction, InvokeParameters, Transaction, TransactionParameters, VersionedTransaction};
+pub use build::{EstimatedTransaction, InvokeParameters, PrivateInvokeParameters, Transaction, TransactionParameters, VersionedTransaction};
 
 mod deploy;
 pub use deploy::DeploymentParameters;
