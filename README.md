@@ -1,31 +1,66 @@
-# AVNU Paymaster
+# avnu Paymaster
 
-💸  Gas abstraction made easy on Starknet  
-
-Open-source. Production-ready. Fully extensible.
+Gas abstraction made easy on Starknet - open-source, production-ready, fully extensible.
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Docs](https://img.shields.io/badge/docs-available-green)]([https://doc.avnu.fi/avnu-paymaster/](https://docs.out-of-gas.xyz/docs/introduction))
+[![Docs](https://img.shields.io/badge/docs-available-green)](https://docs.out-of-gas.xyz)
 [![Build](https://img.shields.io/github/actions/workflow/status/avnu-labs/paymaster/main.yml)](https://github.com/avnu-labs/paymaster/actions)
 [![codecov](https://codecov.io/gh/avnu-labs/paymaster/graph/badge.svg)](https://codecov.io/gh/avnu-labs/paymaster)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/avnu_developers)
 
 Sponsor gas fees, accept any token, and control every detail of the gas experience.
-Empower your application with a SNIP‑29 compliant Paymaster.
+SNIP-29 compliant Paymaster for Starknet.
 
-## ✨ Features
+> [!TIP]
+> **Just want to integrate? No need to self-host.**
+>
+> avnu operates a production-ready managed Paymaster, trusted by 50+ projects on Starknet.
+> - **Gasless** (user pays in any token) - no setup required
+> - **Gasfree** (you sponsor gas) - API key via [Portal](https://portal.avnu.fi)
+>
+> [Documentation](https://docs.avnu.fi/docs/paymaster) · [Portal](https://portal.avnu.fi)
 
-- 💸 **Gasless**: Let users pay in any ERC‑20 (e.g. USDC, DOG, ETH)
-- 🆓 **Gasfree**: Sponsor user transactions with flexible logic (API Key or webhook)
-- ⚡ **Fast setup**: Deploy a full Paymaster in 2 minutes with the CLI
-- 🔁 **Auto-rebalancing**: Swap supported tokens into STRK + refill relayers automatically
-- 📈 **Scales effortlessly**: Vertical (more relayers) or horizontal (multi-instance with Redis)
-- 🔍 **Full observability**: OpenTelemetry metrics, logs & traces out of the box
-- 🔐 **SNIP‑29 compliant**: Integrates with `starknet.js` and `starknet-react`
-- 🧩 **Extensible by design**: Bring your own price feeds, database, or logic
-- ✅ **Audited & trusted**: Forwarder contract reviewed by Nethermind
+## Features
 
-## 📦 Installation
+- **Gasless** - Let users pay gas in any ERC-20 (USDC, ETH, ...)
+- **Gasfree** - Sponsor user transactions with flexible logic (API key or webhook)
+- **Fast setup** - Deploy a full Paymaster in 2 minutes with the CLI
+- **Auto-rebalancing** - Swap supported tokens into STRK and refill relayers automatically
+- **Scales effortlessly** - Vertical (more relayers) or horizontal (multi-instance with Redis)
+- **Full observability** - OpenTelemetry metrics, logs and traces out of the box
+- **SNIP-29 compliant** - Integrates with `starknet.js` and `starknet-react`
+- **Extensible by design** - Bring your own price feeds, database, or logic
+- **Audited** - Forwarder contract reviewed by Nethermind
+
+## Integrate in your dApp
+
+Works with both `starknet.js` and `starknet-react`:
+
+```ts
+// Using avnu's managed instance
+const paymasterRpc = new PaymasterRpc({
+  nodeUrl: "https://sepolia.paymaster.avnu.fi",
+  headers: { "x-paymaster-api-key": "YOUR_API_KEY" },
+});
+
+// Or point to your own self-hosted instance
+// const paymasterRpc = new PaymasterRpc({ nodeUrl: "http://localhost:12777" });
+
+const account = await WalletAccount.connect(
+  STARKNET_PROVIDER,
+  STARKNET_WINDOW_OBJECT_WALLET,
+  undefined,
+  paymasterRpc,
+);
+
+const result = await account.executePaymasterTransaction([CALLS], {
+  feeMode: { mode: "default", gasToken: "<GAS_TOKEN_ADDRESS>" },
+});
+```
+
+Full integration guides: [managed instance](https://docs.avnu.fi/docs/paymaster) · [self-hosted](https://docs.out-of-gas.xyz/docs/dapp-integration)
+
+## Installation
 
 ### asdf (Recommended)
 
@@ -69,10 +104,13 @@ docker pull avnulabs/paymaster:latest
 docker build -t paymaster:latest .
 
 # docker run
-docker run --rm -d -p 12777:12777  -e PAYMASTER_PROFILE=/profiles/default.json -v <PROJECT_DIR>/paymaster/profiles/main.json:/profiles/default.json --name paymaster paymaster
+docker run --rm -d -p 12777:12777 \
+  -e PAYMASTER_PROFILE=/profiles/default.json \
+  -v <PROJECT_DIR>/paymaster/profiles/main.json:/profiles/default.json \
+  --name paymaster paymaster
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 Install the CLI and deploy your Paymaster in 2 minutes:
 
@@ -92,68 +130,35 @@ Then run your Paymaster:
 cargo run --release --bin paymaster-service --profile=path/to/my-profile.json
 ```
 
+## Documentation
 
-## 🧩 Integrate in your dApp
+| Resource | Description |
+|----------|-------------|
+| [docs.avnu.fi/docs/paymaster](https://docs.avnu.fi/docs/paymaster) | Using avnu's managed Paymaster |
+| [portal.avnu.fi](https://portal.avnu.fi) | API keys, gas credits, transaction monitoring |
+| [docs.out-of-gas.xyz](https://docs.out-of-gas.xyz) | Self-hosting your own instance |
+| [Contracts](https://github.com/avnu-labs/paymaster/tree/main/contracts) | Forwarder contracts (audited by Nethermind) |
 
-Supports both starknet.js and starknet-react:
+## Contributing
 
-```ts
-// Starknetjs example
-const paymasterRpc = new PaymasterRpc({ 
-    nodeUrl: "https://sepolia.paymaster.avnu.fi",
-    headers: {'x-paymaster-api-key': 'IF_NEEDED'},
-});
-// const paymasterRpc = new PaymasterRpc({ default: true });
-const account = await WalletAccount.connect(STARKNET_PROVIDER, STARKNET_WINDOW_OBJECT_WALLET, undefined, paymasterRpc);
+See [CONTRIBUTING.md](https://github.com/avnu-labs/paymaster/blob/main/CONTRIBUTING.md) to get started.
 
-const result = await account.executePaymasterTransaction(
-  [CALLS], 
-  { feeMode: { mode: "default", gasToken: "<GAS_TOKEN_ADDRESS>" } }
-);
+## License
 
-const { transaction_hash } = result;
-```
+Licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**.
 
-🔗 [Full Integration Guide available here](https://docs.out-of-gas.xyz/docs/dapp-integration)
+You are free to use, modify, and distribute this code. If you run it as a service (SaaS, API, hosted infra), you must also open-source your changes.
 
-## 📖 Documentation
+> [Full license text](https://www.gnu.org/licenses/agpl-3.0.en.html)
 
-📚 [Full documentation available here](https://docs.out-of-gas.xyz)
+## Questions? Feedback?
 
-## 🧩 Contracts
+Join our dev community: [t.me/avnu_developers](https://t.me/avnu_developers)
 
-📝 [Contracts are available here](https://github.com/avnu-labs/paymaster/tree/main/contracts)
+Made with care by [avnu](https://x.com/avnu_fi)
 
-## 🛠 Contributing
-
-This guide will help you get started and contribute into the Starknet Paymaster. [Contributing](https://github.com/avnu-labs/avnu-paymaster/blob/main/CONTRIBUTING.md)
-
-## 📄 License
-
-The AVNU Paymaster is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**.
-
-- 🧠 You are free to use, modify, and distribute this code.
-- 🛠️ If you run this project as a service (SaaS, API, hosted infra), you **must also open source your changes**.
-- 🤝 This ensures the ecosystem remains open and benefits from improvements.
-
-> Read the full license: [https://www.gnu.org/licenses/agpl-3.0.en.html](https://www.gnu.org/licenses/agpl-3.0.en.html)
-
-
-
-## 💬 Questions? Feedback?
-
-Useful links:
-
-- [Tips & Tricks](https://docs.out-of-gas.xyz/docs/good-to-kow)
-- [Glossary](https://docs.out-of-gas.xyz/docs/glossary)
-
-Join our dev community: 📲 [https://t.me/avnu_developers](https://t.me/avnu_developers)
-
-Made with ❤️ by [AVNU](https://x.com/avnu_fi)
-
-## ⚠️ Legal Disclaimer
+## Legal Disclaimer
 
 This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
 
 Use at your own risk.
-
