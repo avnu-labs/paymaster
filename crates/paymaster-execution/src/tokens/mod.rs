@@ -78,9 +78,14 @@ impl TokenClient {
         Self::with_base_url(AVNU_API_SEPOLIA_URL)
     }
 
+    pub fn integration() -> Self {
+        Self::with_base_url(AVNU_API_SEPOLIA_URL)
+    }
+
     /// Creates a new token service based on chain ID.
     pub fn new(chain_id: ChainID) -> Self {
         match chain_id {
+            ChainID::Integration => Self::integration(),
             ChainID::Sepolia => Self::sepolia(),
             ChainID::Mainnet => Self::mainnet(),
         }

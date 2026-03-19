@@ -106,23 +106,10 @@
       ],
       "result": {
         "name": "result",
-        "description": "The typed data that the user needs to sign, together with information about the fee",
+        "description": "The build result. For standard transactions: typed data + fee. For private invoke: execution parameters + fee + fee action",
         "required": true,
         "schema": {
-          "title": "Execute from outside typed data and the fee information related to the transaction built",
-          "type": "object",
-          "required": [
-            "typed_data",
-            "fee"
-          ],
-          "properties": {
-            "typed_data": {
-              "$ref": "#/components/schemas/OUTSIDE_EXECUTION_TYPED_DATA"
-            },
-            "fee": {
-              "$ref": "#/components/schemas/PAYMASTER_FEE_ESTIMATE"
-            }
-          }
+          "$ref": "#/components/schemas/PAYMASTER_BUILD_RESPONSE"
         }
       },
       "errors": [
@@ -146,6 +133,9 @@
         },
         {
           "$ref": "#/components/errors/TRANSACTION_EXECUTION_ERROR"
+        },
+        {
+          "$ref": "#/components/errors/PRIVACY_POOL_NOT_WHITELISTED"
         }
       ]
     },
@@ -207,6 +197,21 @@
         },
         {
           "$ref": "#/components/errors/TRANSACTION_EXECUTION_ERROR"
+        },
+        {
+          "$ref": "#/components/errors/PRIVACY_POOL_NOT_WHITELISTED"
+        },
+        {
+          "$ref": "#/components/errors/INVALID_APPLY_ACTIONS_SELECTOR"
+        },
+        {
+          "$ref": "#/components/errors/INVOKE_ACTION_NOT_ALLOWED"
+        },
+        {
+          "$ref": "#/components/errors/MISSING_FEE_TRANSFER_TO"
+        },
+        {
+          "$ref": "#/components/errors/CALLDATA_PARSING"
         }
       ]
     }
@@ -277,6 +282,50 @@
                 "$ref": "#/components/schemas/PAYMASTER_EXECUTABLE_INVOKE"
               }
             }
+          },
+          {
+            "title": "Apply Action",
+            "type": "object",
+            "required": [
+              "type",
+              "apply_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": ["apply_action"]
+              },
+              "apply_action": {
+                "title": "Apply action data",
+                "description": "Privacy transaction data including the apply_actions call and ZK proof",
+                "$ref": "#/components/schemas/PAYMASTER_EXECUTABLE_APPLY_ACTION"
+              }
+            }
+          },
+          {
+            "title": "Invoke and Apply Action",
+            "type": "object",
+            "required": [
+              "type",
+              "execute_from_outside",
+              "apply_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": ["invoke_and_apply_action"]
+              },
+              "execute_from_outside": {
+                "title": "Execute from outside data",
+                "description": "Signed user calls (e.g. approve) to be executed before the privacy action",
+                "$ref": "#/components/schemas/PAYMASTER_EXECUTABLE_INVOKE"
+              },
+              "apply_action": {
+                "title": "Apply action data",
+                "description": "Privacy transaction data including the apply_actions call and ZK proof",
+                "$ref": "#/components/schemas/PAYMASTER_EXECUTABLE_APPLY_ACTION"
+              }
+            }
           }
         ]
       },
@@ -302,6 +351,34 @@
             "title": "Signature",
             "description": "Signature of the associated Typed Data",
             "$ref": "#/components/schemas/SIGNATURE"
+          }
+        }
+      },
+      "PAYMASTER_EXECUTABLE_APPLY_ACTION": {
+        "type": "object",
+        "required": [
+          "apply_actions_call",
+          "proof",
+          "proof_facts"
+        ],
+        "properties": {
+          "apply_actions_call": {
+            "title": "Apply actions call",
+            "description": "The full Call targeting a whitelisted privacy pool contract with selector apply_actions",
+            "$ref": "#/components/schemas/CALL"
+          },
+          "proof": {
+            "title": "ZK proof",
+            "description": "The ZK proof as a string",
+            "type": "string"
+          },
+          "proof_facts": {
+            "title": "Proof facts",
+            "description": "The proof facts used to verify the ZK proof on-chain",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FELT"
+            }
           }
         }
       },
@@ -369,6 +446,50 @@
                 "$ref": "#/components/schemas/PAYMASTER_INVOKE"
               }
             }
+          },
+          {
+            "title": "Apply Action",
+            "type": "object",
+            "required": [
+              "type",
+              "apply_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": ["apply_action"]
+              },
+              "apply_action": {
+                "title": "Apply action data",
+                "description": "Parameters for a private transaction without user calls (e.g. withdraw)",
+                "$ref": "#/components/schemas/PAYMASTER_APPLY_ACTION"
+              }
+            }
+          },
+          {
+            "title": "Invoke and Apply Action",
+            "type": "object",
+            "required": [
+              "type",
+              "invoke",
+              "apply_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": ["invoke_and_apply_action"]
+              },
+              "invoke": {
+                "title": "Invoke data",
+                "description": "User calls to include in the transaction (e.g. approve for deposits)",
+                "$ref": "#/components/schemas/PAYMASTER_INVOKE"
+              },
+              "apply_action": {
+                "title": "Apply action data",
+                "description": "Parameters for the private transaction",
+                "$ref": "#/components/schemas/PAYMASTER_APPLY_ACTION"
+              }
+            }
           }
         ]
       },
@@ -391,6 +512,21 @@
             "items": {
               "$ref": "#/components/schemas/CALL"
             }
+          }
+        }
+      },
+      "PAYMASTER_APPLY_ACTION": {
+        "title": "Apply Action Parameters",
+        "description": "Parameters for a private transaction targeting a privacy pool",
+        "type": "object",
+        "required": [
+          "pool_address"
+        ],
+        "properties": {
+          "pool_address": {
+            "title": "Pool Address",
+            "description": "The address of the privacy pool contract",
+            "$ref": "#/components/schemas/FELT"
           }
         }
       },
@@ -491,6 +627,137 @@
             "$ref": "#/components/schemas/FELT"
           }
         }
+      },
+      "PAYMASTER_BUILD_RESPONSE": {
+        "title": "Build response",
+        "description": "The result of building a transaction. For standard transactions, returns typed data to sign and fee estimate. For apply_action, returns fee estimate and fee action. For invoke_and_apply_action, also returns typed data to sign.",
+        "oneOf": [
+          {
+            "title": "Standard build response",
+            "type": "object",
+            "required": [
+              "typed_data",
+              "fee"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "description": "The type of the built transaction (deploy, invoke, deploy_and_invoke)",
+                "type": "string",
+                "enum": ["deploy", "invoke", "deploy_and_invoke"]
+              },
+              "typed_data": {
+                "$ref": "#/components/schemas/OUTSIDE_EXECUTION_TYPED_DATA"
+              },
+              "fee": {
+                "$ref": "#/components/schemas/PAYMASTER_FEE_ESTIMATE"
+              }
+            }
+          },
+          {
+            "title": "Apply action build response",
+            "type": "object",
+            "required": [
+              "type",
+              "parameters",
+              "fee",
+              "fee_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": "apply_action"
+              },
+              "parameters": {
+                "title": "Execution parameters",
+                "description": "The execution parameters to pass back when calling paymaster_execute",
+                "$ref": "#/components/schemas/PAYMASTER_EXECUTION"
+              },
+              "fee": {
+                "title": "Fee estimate",
+                "$ref": "#/components/schemas/PAYMASTER_FEE_ESTIMATE"
+              },
+              "fee_action": {
+                "title": "Fee action",
+                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "$ref": "#/components/schemas/FEE_ACTION"
+              }
+            }
+          },
+          {
+            "title": "Invoke and apply action build response",
+            "type": "object",
+            "required": [
+              "type",
+              "typed_data",
+              "parameters",
+              "fee",
+              "fee_action"
+            ],
+            "properties": {
+              "type": {
+                "title": "Transaction type",
+                "const": "invoke_and_apply_action"
+              },
+              "typed_data": {
+                "title": "Typed data",
+                "description": "Typed data wrapping user calls (e.g. approve) to be signed by the user",
+                "$ref": "#/components/schemas/OUTSIDE_EXECUTION_TYPED_DATA"
+              },
+              "parameters": {
+                "title": "Execution parameters",
+                "description": "The execution parameters to pass back when calling paymaster_execute",
+                "$ref": "#/components/schemas/PAYMASTER_EXECUTION"
+              },
+              "fee": {
+                "title": "Fee estimate",
+                "$ref": "#/components/schemas/PAYMASTER_FEE_ESTIMATE"
+              },
+              "fee_action": {
+                "title": "Fee action",
+                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "$ref": "#/components/schemas/FEE_ACTION"
+              }
+            }
+          }
+        ]
+      },
+      "FEE_ACTION": {
+        "title": "Fee action",
+        "description": "Describes the fee payment the user must include in the privacy proof. The type field indicates the mechanism (e.g. withdraw). The resulting TransferTo server action pays the forwarder, which forwards to the gas fees recipient",
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "Withdraw fee action",
+            "required": [
+              "type",
+              "recipient",
+              "token",
+              "amount"
+            ],
+            "properties": {
+              "type": {
+                "title": "Action type",
+                "const": "withdraw"
+              },
+              "recipient": {
+                "title": "Fee recipient",
+                "description": "The forwarder address that should receive the fee payment via a Withdraw/TransferTo action",
+                "$ref": "#/components/schemas/ADDRESS"
+              },
+              "token": {
+                "title": "Token",
+                "description": "The token used for fee payment",
+                "$ref": "#/components/schemas/ADDRESS"
+              },
+              "amount": {
+                "title": "Amount",
+                "description": "The fee amount to withdraw (covers gas cost + pool fee + provider overhead)",
+                "$ref": "#/components/schemas/FELT"
+              }
+            }
+          }
+        ]
       },
       "ADDRESS": {
         "title": "Address",
@@ -1214,9 +1481,30 @@
         "code": 160,
         "message": "An error occurred (INVALID_ID)"
       },
+      "PRIVACY_POOL_NOT_WHITELISTED": {
+        "code": 161,
+        "message": "An error occurred (PRIVACY_POOL_NOT_WHITELISTED)"
+      },
+      "INVALID_APPLY_ACTIONS_SELECTOR": {
+        "code": 162,
+        "message": "An error occurred (INVALID_APPLY_ACTIONS_SELECTOR)"
+      },
       "UNKNOWN_ERROR": {
         "code": 163,
         "message": "An error occurred (UNKNOWN_ERROR)",
+        "data": "string"
+      },
+      "INVOKE_ACTION_NOT_ALLOWED": {
+        "code": 164,
+        "message": "An error occurred (INVOKE_ACTION_NOT_ALLOWED)"
+      },
+      "MISSING_FEE_TRANSFER_TO": {
+        "code": 165,
+        "message": "An error occurred (MISSING_FEE_TRANSFER_TO)"
+      },
+      "CALLDATA_PARSING": {
+        "code": 166,
+        "message": "An error occurred (CALLDATA_PARSING)",
         "data": "string"
       }
     }

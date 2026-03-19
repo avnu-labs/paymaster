@@ -6,11 +6,14 @@ use starknet::core::types::Felt;
 
 use crate::Error;
 
+pub const SN_INTEGRATION_SEPOLIA: Felt = Felt::from_raw([356451801641654316, 18443812999431337335, 7869628190608881772, 122696121091289693]);
+
 /// Represent the chain id which is either Sepolia or Mainnet
 #[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChainID {
     Sepolia,
+    Integration,
     Mainnet,
 }
 
@@ -24,6 +27,7 @@ impl ChainID {
         match s {
             "SN_SEPOLIA" => Ok(Self::Sepolia),
             "SN_MAIN" => Ok(Self::Mainnet),
+            "SN_INTEGRATION_SEPOLIA" => Ok(Self::Integration),
             _ => Err(Error::TypedDataDecoding(format!("invalid domain {}", s))),
         }
     }
@@ -35,6 +39,7 @@ impl ChainID {
         String::from_str(match self {
             Self::Sepolia => "SN_SEPOLIA",
             Self::Mainnet => "SN_MAIN",
+            Self::Integration => "SN_INTEGRATION_SEPOLIA",
         })
         .unwrap()
     }
@@ -46,6 +51,9 @@ impl ChainID {
     /// If the conversion fail, return an error
     pub fn from_string(s: &str) -> Result<Self, Error> {
         match s {
+            "integration" => Ok(Self::Integration),
+            "Integration" => Ok(Self::Integration),
+            "SN_INTEGRATION_SEPOLIA" => Ok(Self::Integration),
             "sepolia" => Ok(Self::Sepolia),
             "SEPOLIA" => Ok(Self::Sepolia),
             "Sepolia" => Ok(Self::Sepolia),
@@ -63,7 +71,9 @@ impl ChainID {
     ///
     /// If the conversion fail, return an error
     pub fn from_felt(value: Felt) -> Result<Self, Error> {
-        if value == SEPOLIA {
+        if value == SN_INTEGRATION_SEPOLIA {
+            Ok(Self::Sepolia)
+        } else if value == SEPOLIA {
             Ok(Self::Sepolia)
         } else if value == MAINNET {
             Ok(Self::Mainnet)
@@ -74,6 +84,7 @@ impl ChainID {
 
     pub fn as_felt(&self) -> Felt {
         match self {
+            Self::Integration => SN_INTEGRATION_SEPOLIA,
             Self::Sepolia => SEPOLIA,
             Self::Mainnet => MAINNET,
         }

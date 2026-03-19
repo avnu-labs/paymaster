@@ -3,7 +3,7 @@ use paymaster_starknet::Signature;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::core::serde::unsigned_field_element::UfeHex;
-use starknet::core::types::{Felt, TypedData};
+use starknet::core::types::{Call, Felt, TypedData};
 
 use crate::endpoint::common::{DeploymentParameters, ExecutionParameters};
 use crate::endpoint::validation::check_service_is_available;
@@ -29,6 +29,13 @@ pub enum ExecutableTransactionParameters {
         deployment: DeploymentParameters,
         invoke: ExecutableInvokeParameters,
     },
+    ApplyAction {
+        apply_action: ExecutableApplyActionParameters,
+    },
+    InvokeAndApplyAction {
+        invoke: ExecuteFromOutsideData,
+        apply_action: ExecutableApplyActionParameters,
+    },
 }
 
 impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
@@ -41,6 +48,13 @@ impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::Executabl
             ExecutableTransactionParameters::DeployAndInvoke { deployment, invoke } => Self::DeployAndInvoke {
                 deployment: deployment.into(),
                 invoke: invoke.try_into()?,
+            },
+            ExecutableTransactionParameters::ApplyAction { apply_action } => Self::ApplyAction {
+                apply_action: apply_action.into(),
+            },
+            ExecutableTransactionParameters::InvokeAndApplyAction { invoke, apply_action } => Self::InvokeAndApplyAction {
+                invoke: invoke.try_into()?,
+                apply_action: apply_action.into(),
             },
         })
     }
@@ -69,6 +83,43 @@ impl TryFrom<ExecutableInvokeParameters> for paymaster_execution::ExecutableInvo
 }
 
 #[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct ExecuteFromOutsideData {
+    #[serde_as(as = "UfeHex")]
+    pub user_address: Felt,
+
+    pub typed_data: TypedData,
+
+    #[serde_as(as = "Vec<UfeHex>")]
+    pub signature: Signature,
+}
+
+impl TryFrom<ExecuteFromOutsideData> for paymaster_execution::ExecutableInvokeParameters {
+    type Error = Error;
+
+    fn try_from(value: ExecuteFromOutsideData) -> Result<Self, Self::Error> {
+        Ok(Self::new(value.user_address, value.typed_data, value.signature)?)
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct ExecutableApplyActionParameters {
+    pub apply_actions_call: Call,
+
+    pub proof: String,
+
+    #[serde_as(as = "Vec<UfeHex>")]
+    pub proof_facts: Vec<Felt>,
+}
+
+impl From<ExecutableApplyActionParameters> for paymaster_execution::ExecutableApplyActionParameters {
+    fn from(value: ExecutableApplyActionParameters) -> Self {
+        Self::new(value.apply_actions_call, value.proof, value.proof_facts)
+    }
+}
+
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExecuteResponse {
     #[serde_as(as = "UfeHex")]
@@ -89,6 +140,8 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
         gas_tank_address,
         parameters: request.parameters.into(),
         transaction: request.transaction.try_into()?,
+        privacy_pool: ctx.configuration.privacy_pool,
+        privacy_pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
     };
 
     ctx.transaction_filter.filter(&transaction.transaction)?;

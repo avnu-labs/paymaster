@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use jsonrpsee::core::Serialize;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObject;
@@ -15,11 +17,13 @@ pub use context::{Configuration, RPCConfiguration};
 mod endpoint;
 use crate::endpoint::execute_raw::{ExecuteDirectRequest, ExecuteDirectResponse};
 pub use endpoint::build::{
-    BuildTransactionRequest, BuildTransactionResponse, DeployAndInvokeTransaction, DeployTransaction, FeeEstimate, InvokeParameters, InvokeTransaction,
-    TransactionParameters,
+    ApplyActionParameters, ApplyActionTransaction, BuildTransactionRequest, BuildTransactionResponse, DeployAndInvokeTransaction, DeployTransaction, FeeAction,
+    FeeEstimate, InvokeAndApplyActionTransaction, InvokeParameters, InvokeTransaction, TransactionParameters,
 };
 pub use endpoint::common::{DeploymentParameters, ExecutionParameters, FeeMode, TimeBounds};
-pub use endpoint::execute::{ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteRequest, ExecuteResponse};
+pub use endpoint::execute::{
+    ExecutableApplyActionParameters, ExecutableInvokeParameters, ExecutableTransactionParameters, ExecuteFromOutsideData, ExecuteRequest, ExecuteResponse,
+};
 pub use endpoint::token::TokenPrice;
 
 mod middleware;
@@ -83,6 +87,18 @@ pub enum Error {
     #[error("max amount too low")]
     MaxAmountTooLow,
 
+    #[error("privacy transactions require sponsoring")]
+    PrivacyRequiresSponsoring,
+
+    #[error("privacy proof missing")]
+    PrivacyProofMissing,
+
+    #[error("missing fee payment in private transaction calldata")]
+    MissingFeeTransferTo,
+
+    #[error("failed to parse private transaction calldata")]
+    CalldataParsing,
+
     #[error("{0:?}")]
     Execution(ContractExecutionError),
 }
@@ -113,7 +129,13 @@ impl From<RelayerError> for Error {
 
 impl From<PaymasterExecutionError> for Error {
     fn from(value: PaymasterExecutionError) -> Self {
-        Self::Execution(ContractExecutionError::Message(value.to_string()))
+        match value {
+            PaymasterExecutionError::PrivacyRequiresSponsoring => Self::PrivacyRequiresSponsoring,
+            PaymasterExecutionError::MissingFeeTransferTo => Self::MissingFeeTransferTo,
+            PaymasterExecutionError::CalldataParsing(_) => Self::CalldataParsing,
+            PaymasterExecutionError::MaxAmountTooLow(_) => Self::MaxAmountTooLow,
+            other => Self::Execution(ContractExecutionError::Message(other.to_string())),
+        }
     }
 }
 
@@ -132,6 +154,10 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::ClassHashNotSupported => ErrorObject::borrowed(155, "An error occurred (CLASS_HASH_NOT_SUPPORTED)", None),
             Error::InvalidTimeBounds => ErrorObject::borrowed(157, "An error occurred (INVALID_TIME_BOUNDS)", None),
             Error::InvalidDeploymentData => ErrorObject::borrowed(158, "An error occurred (INVALID_DEPLOYMENT_DATA)", None),
+            Error::PrivacyRequiresSponsoring => ErrorObject::borrowed(159, "An error occurred (PRIVACY_REQUIRES_SPONSORING)", None),
+            Error::PrivacyProofMissing => ErrorObject::borrowed(161, "An error occurred (PRIVACY_PROOF_MISSING)", None),
+            Error::MissingFeeTransferTo => ErrorObject::borrowed(165, "An error occurred (MISSING_FEE_TRANSFER_TO)", None),
+            Error::CalldataParsing => ErrorObject::borrowed(166, "An error occurred (CALLDATA_PARSING)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),

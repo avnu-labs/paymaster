@@ -1,10 +1,16 @@
 use crate::Error;
 use starknet::core::types::Felt;
 
+pub fn felt_to_u64(felt: Felt) -> Result<u64, Error> {
+    felt.to_biguint()
+        .try_into()
+        .map_err(|_| Error::Internal(format!("Failed to convert Felt {} to u64", felt.to_hex_string())))
+}
+
 pub fn felt_to_u128(felt: Felt) -> Result<u128, Error> {
     felt.to_biguint()
         .try_into()
-        .map_err(|_| Error::Internal(format!("Failed to convert Felt {:?}to u128", felt.to_hex_string())))
+        .map_err(|_| Error::Internal(format!("Failed to convert Felt {} to u128", felt.to_hex_string())))
 }
 
 pub fn normalize_felt(amount: f64, decimals: u32) -> Felt {

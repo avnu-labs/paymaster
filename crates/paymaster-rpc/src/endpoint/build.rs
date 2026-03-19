@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
 use jsonrpsee::core::Serialize;
-use paymaster_execution::Transaction;
+use paymaster_execution::{PrivateInvokeUserCalls, PrivateTransaction, Transaction};
 use paymaster_starknet::transaction::Calls;
 use serde::Deserialize;
+use serde_with::serde_as;
+use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::{Call, Felt, TypedData};
 
 use crate::context::Context;
@@ -21,21 +23,42 @@ pub struct BuildTransactionRequest {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TransactionParameters {
-    Deploy { deployment: DeploymentParameters },
-    Invoke { invoke: InvokeParameters },
-    DeployAndInvoke { deployment: DeploymentParameters, invoke: InvokeParameters },
+    Deploy {
+        deployment: DeploymentParameters,
+    },
+    Invoke {
+        invoke: InvokeParameters,
+    },
+    DeployAndInvoke {
+        deployment: DeploymentParameters,
+        invoke: InvokeParameters,
+    },
+    ApplyAction {
+        apply_action: ApplyActionParameters,
+    },
+    InvokeAndApplyAction {
+        invoke: InvokeParameters,
+        apply_action: ApplyActionParameters,
+    },
 }
 
-impl From<TransactionParameters> for paymaster_execution::TransactionParameters {
-    fn from(value: TransactionParameters) -> Self {
-        match value {
+impl TryFrom<TransactionParameters> for paymaster_execution::TransactionParameters {
+    type Error = Error;
+
+    fn try_from(value: TransactionParameters) -> Result<Self, Self::Error> {
+        Ok(match value {
             TransactionParameters::Deploy { deployment } => Self::Deploy { deployment: deployment.into() },
             TransactionParameters::Invoke { invoke } => Self::Invoke { invoke: invoke.into() },
             TransactionParameters::DeployAndInvoke { deployment, invoke } => Self::DeployAndInvoke {
                 deployment: deployment.into(),
                 invoke: invoke.into(),
             },
-        }
+            TransactionParameters::ApplyAction { .. } | TransactionParameters::InvokeAndApplyAction { .. } => {
+                return Err(Error::Execution(starknet::core::types::ContractExecutionError::Message(
+                    "ApplyAction cannot be converted to standard transaction parameters".to_string(),
+                )));
+            },
+        })
     }
 }
 
@@ -45,6 +68,8 @@ impl TransactionParameters {
             Self::Deploy { .. } => &[],
             Self::Invoke { invoke } => &invoke.calls,
             Self::DeployAndInvoke { invoke, .. } => &invoke.calls,
+            Self::ApplyAction { .. } => &[],
+            Self::InvokeAndApplyAction { invoke, .. } => &invoke.calls,
         }
     }
 }
@@ -53,6 +78,13 @@ impl TransactionParameters {
 pub struct InvokeParameters {
     pub user_address: Felt,
     pub calls: Vec<Call>,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ApplyActionParameters {
+    #[serde_as(as = "UfeHex")]
+    pub pool_address: Felt,
 }
 
 impl From<InvokeParameters> for paymaster_execution::InvokeParameters {
@@ -70,6 +102,8 @@ pub enum BuildTransactionResponse {
     Deploy(DeployTransaction),
     Invoke(InvokeTransaction),
     DeployAndInvoke(DeployAndInvokeTransaction),
+    ApplyAction(ApplyActionTransaction),
+    InvokeAndApplyAction(InvokeAndApplyActionTransaction),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -112,6 +146,49 @@ impl From<DeployAndInvokeTransaction> for BuildTransactionResponse {
     }
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ApplyActionTransaction {
+    pub parameters: ExecutionParameters,
+    pub fee: FeeEstimate,
+    pub fee_action: FeeAction,
+}
+
+impl From<ApplyActionTransaction> for BuildTransactionResponse {
+    fn from(value: ApplyActionTransaction) -> Self {
+        Self::ApplyAction(value)
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct InvokeAndApplyActionTransaction {
+    pub typed_data: TypedData,
+    pub parameters: ExecutionParameters,
+    pub fee: FeeEstimate,
+    pub fee_action: FeeAction,
+}
+
+impl From<InvokeAndApplyActionTransaction> for BuildTransactionResponse {
+    fn from(value: InvokeAndApplyActionTransaction) -> Self {
+        Self::InvokeAndApplyAction(value)
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FeeAction {
+    Withdraw {
+        #[serde_as(as = "UfeHex")]
+        recipient: Felt,
+        #[serde_as(as = "UfeHex")]
+        token: Felt,
+        #[serde_as(as = "UfeHex")]
+        amount: Felt,
+    },
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FeeEstimate {
     pub gas_token_price_in_strk: Felt,
@@ -135,6 +212,14 @@ impl From<paymaster_execution::FeeEstimate> for FeeEstimate {
     }
 }
 
+impl From<paymaster_execution::FeeAction> for FeeAction {
+    fn from(value: paymaster_execution::FeeAction) -> Self {
+        match value {
+            paymaster_execution::FeeAction::Withdraw { recipient, token, amount } => Self::Withdraw { recipient, token, amount },
+        }
+    }
+}
+
 pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
     check_service_is_available(ctx).await?;
     check_is_allowed_fee_mode(ctx, &request.parameters).await?;
@@ -145,7 +230,59 @@ pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: Build
 
     match &request.transaction {
         TransactionParameters::Deploy { .. } if request.parameters.fee_mode().is_sponsored() => build_deploy_sponsored(ctx, request).await,
+        TransactionParameters::ApplyAction { .. } | TransactionParameters::InvokeAndApplyAction { .. } => build_apply_action(ctx, request).await,
         _ => build_transaction(ctx, request).await,
+    }
+}
+
+async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
+    let (pool_address, invoke) = match &request.transaction {
+        TransactionParameters::ApplyAction { apply_action } => (apply_action.pool_address, None),
+        TransactionParameters::InvokeAndApplyAction { invoke, apply_action } => (apply_action.pool_address, Some(invoke.clone())),
+        _ => {
+            return Err(Error::Execution(starknet::core::types::ContractExecutionError::Message(
+                "Expected ApplyAction or InvokeAndApplyAction transaction".to_string(),
+            )));
+        },
+    };
+
+    // Validate pool is whitelisted
+    if ctx.configuration.privacy_pool != pool_address {
+        return Err(Error::Execution(starknet::core::types::ContractExecutionError::Message(
+            "privacy pool address is not whitelisted".to_string(),
+        )));
+    }
+
+    let parameters = request.parameters.clone();
+
+    let user_calls = invoke.map(|inv| PrivateInvokeUserCalls {
+        user_address: inv.user_address,
+        calls: Calls::new(inv.calls),
+    });
+
+    let transaction = PrivateTransaction {
+        forwarder: ctx.configuration.forwarder,
+        parameters: request.parameters.into(),
+        pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        user_calls,
+    };
+
+    let estimated = transaction.estimate(&ctx.execution).await?;
+
+    match estimated.typed_data {
+        Some(typed_data) => Ok(InvokeAndApplyActionTransaction {
+            typed_data,
+            parameters,
+            fee: estimated.fee_estimate.into(),
+            fee_action: estimated.fee_action.into(),
+        }
+        .into()),
+        None => Ok(ApplyActionTransaction {
+            parameters,
+            fee: estimated.fee_estimate.into(),
+            fee_action: estimated.fee_action.into(),
+        }
+        .into()),
     }
 }
 
@@ -159,7 +296,7 @@ async fn build_deploy_sponsored(ctx: &Context, request: BuildTransactionRequest)
 
     let transaction = Transaction {
         forwarder: ctx.configuration.forwarder,
-        transaction: request.transaction.into(),
+        transaction: request.transaction.try_into()?,
         parameters: request.parameters.into(),
     };
 
@@ -174,7 +311,7 @@ async fn build_deploy_sponsored(ctx: &Context, request: BuildTransactionRequest)
 async fn build_transaction(ctx: &Context, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
     let transaction = Transaction {
         forwarder: ctx.configuration.forwarder,
-        transaction: request.transaction.into(),
+        transaction: request.transaction.try_into()?,
         parameters: request.parameters.into(),
     };
 

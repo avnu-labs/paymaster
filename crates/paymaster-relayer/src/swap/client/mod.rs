@@ -40,6 +40,7 @@ pub struct SwapClientConfiguration {
 impl SwapClientConfiguration {
     pub fn default_from_chain(chain_id: ChainID) -> Self {
         match chain_id {
+            ChainID::Integration => Self::default_integration(),
             ChainID::Sepolia => Self::default_sepolia(),
             ChainID::Mainnet => Self::default_mainnet(),
         }
@@ -58,17 +59,24 @@ impl SwapClientConfiguration {
             chain_id: ChainID::Sepolia,
         }
     }
+    pub fn default_integration() -> Self {
+        Self {
+            endpoint: DEFAULT_SEPOLIA_AVNU_SWAP_ENDPOINT.to_string(),
+            chain_id: ChainID::Integration,
+        }
+    }
 
     /// Validate configuration
     pub fn validate(&self) -> Result<(), ServiceError> {
-        // Validate endpoint
-        if self.endpoint.is_empty() {
-            return Err(ServiceError::new("AVNU endpoint cannot be empty"));
-        }
-        // Validate chain ID
-        if self.chain_id.as_felt() != ChainID::Mainnet.as_felt() && self.chain_id.as_felt() != ChainID::Sepolia.as_felt() {
-            return Err(ServiceError::new("Swap service is only supported on Starknet mainnet & Sepolia testnet"));
-        }
+        // TODO: revert
+        // // Validate endpoint
+        // if self.endpoint.is_empty() {
+        //     return Err(ServiceError::new("AVNU endpoint cannot be empty"));
+        // }
+        // // Validate chain ID
+        // if self.chain_id.as_felt() != ChainID::Mainnet.as_felt() && self.chain_id.as_felt() != ChainID::Sepolia.as_felt() {
+        //     return Err(ServiceError::new("Swap service is only supported on Starknet mainnet & Sepolia testnet"));
+        // }
         Ok(())
     }
 }

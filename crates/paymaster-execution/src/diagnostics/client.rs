@@ -27,6 +27,7 @@ impl DiagnosticClient {
     pub fn new(chain_id: ChainID) -> Self {
         let token_client = TokenClient::new(chain_id);
         let avnu_contract_address = match chain_id {
+            ChainID::Integration => AVNU_EXCHANGE_ADDRESS_SEPOLIA,
             ChainID::Sepolia => AVNU_EXCHANGE_ADDRESS_SEPOLIA,
             ChainID::Mainnet => AVNU_EXCHANGE_ADDRESS_MAINNET,
         };

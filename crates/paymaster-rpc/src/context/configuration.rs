@@ -15,6 +15,9 @@ pub struct Configuration {
     pub forwarder: Felt,
     pub supported_tokens: HashSet<Felt>,
 
+    pub privacy_pool: Felt,
+    pub privacy_pool_fee_amount: u128,
+
     pub max_fee_multiplier: f32,
     pub provider_fee_overhead: f32,
 

@@ -3,18 +3,20 @@ use std::ops::Deref;
 use serde::{Deserialize, Serialize};
 use starknet::accounts::{Account, AccountError, ConnectedAccount};
 use starknet::core::types::{
-    BlockId, BlockTag, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult, ResourceBounds,
-    ResourceBoundsMapping,
+    BlockId, BlockTag, BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult,
+    ResourceBounds, ResourceBoundsMapping,
 };
 use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
 use tracing::error;
 
-use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TimeBounds, TransactionGasEstimate};
+use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, PrivateProofData, TimeBounds, TransactionGasEstimate};
 use crate::{ChainID, Error, StarknetAccount};
 
 mod calldata;
 pub use calldata::{AsCalldata, CalldataBuilder, SequentialCalldataDecoder};
+mod server_action;
+pub use server_action::{parse_server_actions, ServerAction, ServerActionError};
 mod transfer;
 pub use transfer::{StrkTransfer, TokenTransfer};
 use uuid::Uuid;
@@ -51,13 +53,28 @@ impl Calls {
     }
 
     pub fn with_estimate(self, estimate: TransactionGasEstimate) -> EstimatedCalls {
-        EstimatedCalls { calls: self, estimate }
+        EstimatedCalls {
+            calls: self,
+            estimate,
+            proof_data: None,
+        }
+    }
+
+    pub fn with_estimate_and_proof(self, estimate: TransactionGasEstimate, proof_data: PrivateProofData) -> EstimatedCalls {
+        EstimatedCalls {
+            calls: self,
+            estimate,
+            proof_data: Some(proof_data),
+        }
     }
 
     pub async fn estimate(&self, account: &StarknetAccount, tip: Option<u64>) -> Result<EstimatedCalls, Error> {
         let tip = match tip {
             None => {
-                let block = account.provider().get_block_with_txs(BlockId::Tag(BlockTag::Latest)).await?;
+                let block = account
+                    .provider()
+                    .get_block_with_txs(BlockId::Tag(BlockTag::Latest), None)
+                    .await?;
                 block.median_tip()
             },
             Some(tip) => tip,
@@ -66,6 +83,31 @@ impl Calls {
         let result = account.execute_v3(self.to_vec()).tip(tip).estimate_fee().await?;
 
         Ok(self.clone().with_estimate(TransactionGasEstimate::new(result, tip)))
+    }
+
+    pub async fn estimate_with_proof(&self, account: &StarknetAccount, tip: Option<u64>, proof_data: &PrivateProofData) -> Result<EstimatedCalls, Error> {
+        let tip = match tip {
+            None => {
+                let block = account
+                    .provider()
+                    .get_block_with_txs(BlockId::Tag(BlockTag::Latest), None)
+                    .await?;
+                block.median_tip()
+            },
+            Some(tip) => tip,
+        };
+
+        let result = account
+            .execute_v3(self.to_vec())
+            .tip(tip)
+            .proof_facts(proof_data.proof_facts.clone())
+            .proof(proof_data.proof.clone())
+            .estimate_fee()
+            .await?;
+
+        Ok(self
+            .clone()
+            .with_estimate_and_proof(TransactionGasEstimate::new(result, tip), proof_data.clone()))
     }
 
     pub async fn execute(&self, account: &StarknetAccount, nonce: Felt) -> Result<InvokeTransactionResult, Error> {
@@ -83,32 +125,35 @@ impl Calls {
     }
 
     pub fn as_transaction(&self, sender: Felt, nonce: Felt, tip: u64) -> BroadcastedTransaction {
-        BroadcastedTransaction::Invoke(BroadcastedInvokeTransactionV3 {
-            sender_address: sender,
-            calldata: CalldataBuilder::new().encode(&self.0).build(),
-
-            signature: vec![],
-            nonce,
-            resource_bounds: ResourceBoundsMapping {
-                l1_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
+        BroadcastedTransaction::Invoke(BroadcastedInvokeTransaction {
+            broadcasted_invoke_txn_v3: BroadcastedInvokeTransactionV3 {
+                sender_address: sender,
+                calldata: CalldataBuilder::new().encode(&self.0).build(),
+                signature: vec![],
+                nonce,
+                resource_bounds: ResourceBoundsMapping {
+                    l1_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l1_data_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l2_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
                 },
-                l1_data_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
-                l2_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
+                tip,
+                paymaster_data: vec![],
+                account_deployment_data: vec![],
+                nonce_data_availability_mode: DataAvailabilityMode::L1,
+                fee_data_availability_mode: DataAvailabilityMode::L1,
+                proof_facts: None,
+                is_query: true,
             },
-            tip,
-            paymaster_data: vec![],
-            account_deployment_data: vec![],
-            nonce_data_availability_mode: DataAvailabilityMode::L1,
-            fee_data_availability_mode: DataAvailabilityMode::L1,
-            is_query: true,
+            proof: None,
         })
     }
 
@@ -143,6 +188,7 @@ impl Calls {
 pub struct EstimatedCalls {
     calls: Calls,
     estimate: TransactionGasEstimate,
+    proof_data: Option<PrivateProofData>,
 }
 
 impl EstimatedCalls {
@@ -151,7 +197,7 @@ impl EstimatedCalls {
     }
 
     pub async fn execute(&self, account: &StarknetAccount, nonce: Felt) -> Result<InvokeTransactionResult, Error> {
-        let result = account
+        let mut execution = account
             .execute_v3(self.calls.to_vec())
             .nonce(nonce)
             .l1_gas(self.estimate.l1_gas_consumed())
@@ -160,9 +206,15 @@ impl EstimatedCalls {
             .l2_gas_price(self.estimate.l2_gas_price()?)
             .l1_data_gas(self.estimate.l1_data_gas_consumed())
             .l1_data_gas_price(self.estimate.l1_data_gas_price()?)
-            .tip(self.estimate.tip())
-            .send()
-            .await;
+            .tip(self.estimate.tip());
+
+        if let Some(proof_data) = &self.proof_data {
+            execution = execution
+                .proof_facts(proof_data.proof_facts.clone())
+                .proof(proof_data.proof.clone());
+        }
+
+        let result = execution.send().await;
 
         match &result {
             Err(AccountError::Provider(e @ ProviderError::RateLimited)) => {

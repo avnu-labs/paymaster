@@ -8,3 +8,4 @@ rebalancing_test_report*
 setup.sh
 *.json
 .claude
+scripts/

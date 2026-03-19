@@ -28,7 +28,8 @@ use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
 use paymaster_starknet::{
-    ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration, DEFAULT_MAINNET_RPC_ENDPOINT, DEFAULT_SEPOLIA_RPC_ENDPOINT,
+    ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration, DEFAULT_INTEGRATION_SEPOLIA_RPC_ENDPOINT,
+    DEFAULT_MAINNET_RPC_ENDPOINT, DEFAULT_SEPOLIA_RPC_ENDPOINT,
 };
 use starknet::accounts::ConnectedAccount;
 use starknet::core::types::{Call, Felt};
@@ -116,6 +117,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
     // Load the configuration
     let chain_id = ChainID::from_string(&params.chain_id).expect("invalid chain-id");
     let default_rpc_url = match chain_id {
+        ChainID::Integration => DEFAULT_INTEGRATION_SEPOLIA_RPC_ENDPOINT,
         ChainID::Sepolia => DEFAULT_SEPOLIA_RPC_ENDPOINT,
         ChainID::Mainnet => DEFAULT_MAINNET_RPC_ENDPOINT,
     };
@@ -241,6 +243,8 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         provider_fee_overhead: params.fee_overhead,
         supported_tokens,
         forwarder: forwarder_deployment.address,
+        privacy_pool: Felt::ZERO,
+        privacy_pool_fee_amount: None,
         estimate_account: StarknetAccountConfiguration {
             address: estimate_account_address,
             private_key: estimate_account_pk,
@@ -270,6 +274,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
             endpoint: DEFAULT_COINGECKO_PRICE_ENDPOINT.to_string(),
             api_key: None,
             address_to_id: match chain_id {
+                ChainID::Integration => DEFAULT_COINGECKO_SEPOLIA_TOKENS.iter(),
                 ChainID::Sepolia => DEFAULT_COINGECKO_SEPOLIA_TOKENS.iter(),
                 ChainID::Mainnet => DEFAULT_COINGECKO_MAINNET_TOKENS.iter(),
             }

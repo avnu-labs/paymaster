@@ -5,6 +5,21 @@ pub enum Error {
     #[error("internal error {0}")]
     Internal(String),
 
+    #[error("privacy requires sponsoring")]
+    PrivacyRequiresSponsoring,
+
+    #[error("missing fee TransferTo action for an accepted recipient")]
+    MissingFeeTransferTo,
+
+    #[error("failed to parse ServerActions from calldata: {0}")]
+    CalldataParsing(String),
+
+    #[error("privacy pool address is not whitelisted")]
+    PrivacyPoolNotWhitelisted,
+
+    #[error("invalid apply_actions selector")]
+    InvalidApplyActionsSelector,
+
     #[error("invalid nonce")]
     InvalidNonce,
 

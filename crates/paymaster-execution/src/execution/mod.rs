@@ -1,14 +1,20 @@
 mod build;
-pub use build::{EstimatedTransaction, InvokeParameters, Transaction, TransactionParameters, VersionedTransaction};
+pub use build::{
+    EstimatedPrivateTransaction, EstimatedTransaction, InvokeParameters, PrivateInvokeUserCalls, PrivateTransaction, Transaction, TransactionParameters,
+    VersionedTransaction,
+};
 
 mod deploy;
 pub use deploy::DeploymentParameters;
 
 mod execute;
-pub use execute::{EstimatedExecutableTransaction, ExecutableDirectInvokeParameters, ExecutableInvokeParameters, ExecutableTransaction, ExecutableTransactionParameters};
+pub use execute::{
+    EstimatedExecutableTransaction, ExecutableApplyActionParameters, ExecutableDirectInvokeParameters, ExecutableInvokeParameters, ExecutableTransaction,
+    ExecutableTransactionParameters,
+};
 
 mod fee;
-pub use fee::{FeeEstimate, ValidationGasOverhead};
+pub use fee::{FeeAction, FeeEstimate, ValidationGasOverhead};
 use jsonrpsee::core::Serialize;
 use paymaster_starknet::constants::Token;
 pub use paymaster_starknet::transaction::TimeBounds;

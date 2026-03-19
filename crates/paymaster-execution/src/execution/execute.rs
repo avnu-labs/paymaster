@@ -1,5 +1,7 @@
 use paymaster_prices::math::convert_strk_to_token;
-use paymaster_starknet::transaction::{CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, SequentialCalldataDecoder, TokenTransfer};
+use paymaster_starknet::transaction::{
+    parse_server_actions, CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, PrivateProofData, SequentialCalldataDecoder, ServerAction, TokenTransfer,
+};
 use paymaster_starknet::Signature;
 use starknet::core::types::{Call, Felt, InvokeTransactionResult, TypedData};
 use starknet::macros::selector;
@@ -24,6 +26,13 @@ pub enum ExecutableTransactionParameters {
     DirectInvoke {
         invoke: ExecutableDirectInvokeParameters,
     },
+    ApplyAction {
+        apply_action: ExecutableApplyActionParameters,
+    },
+    InvokeAndApplyAction {
+        invoke: ExecutableInvokeParameters,
+        apply_action: ExecutableApplyActionParameters,
+    },
 }
 
 impl ExecutableTransactionParameters {
@@ -33,7 +42,28 @@ impl ExecutableTransactionParameters {
             ExecutableTransactionParameters::Invoke { invoke } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.get_unique_identifier(),
             ExecutableTransactionParameters::DirectInvoke { invoke } => invoke.get_unique_indentifier(),
+            ExecutableTransactionParameters::ApplyAction { apply_action } => apply_action.get_unique_identifier(),
+            ExecutableTransactionParameters::InvokeAndApplyAction { invoke, apply_action } => {
+                let mut hasher = DefaultHasher::new();
+                invoke.user.hash(&mut hasher);
+                invoke.message.nonce().hash(&mut hasher);
+                apply_action.apply_actions_call.calldata.hash(&mut hasher);
+                apply_action.proof_data.hash(&mut hasher);
+                hasher.finish()
+            },
         }
+    }
+
+    pub fn extract_proof_data(&self) -> Option<PrivateProofData> {
+        match self {
+            ExecutableTransactionParameters::ApplyAction { apply_action } => Some(apply_action.proof_data.clone()),
+            ExecutableTransactionParameters::InvokeAndApplyAction { apply_action, .. } => Some(apply_action.proof_data.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_private(&self) -> bool {
+        matches!(self, Self::ApplyAction { .. } | Self::InvokeAndApplyAction { .. })
     }
 }
 
@@ -78,6 +108,42 @@ impl ExecutableInvokeParameters {
         self.user.hash(&mut hasher);
         self.message.nonce().hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+#[derive(Debug, Hash)]
+pub struct ExecutableApplyActionParameters {
+    pub apply_actions_call: Call,
+    pub proof_data: PrivateProofData,
+}
+
+impl ExecutableApplyActionParameters {
+    pub fn new(apply_actions_call: Call, proof: String, proof_facts: Vec<Felt>) -> Self {
+        Self {
+            apply_actions_call,
+            proof_data: PrivateProofData { proof, proof_facts },
+        }
+    }
+
+    pub fn get_unique_identifier(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.apply_actions_call.calldata.hash(&mut hasher);
+        self.proof_data.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
+        let actions = parse_server_actions(&self.apply_actions_call.calldata).map_err(|e| Error::CalldataParsing(e.to_string()))?;
+
+        let (transfer_token, transfer_amount) = actions
+            .iter()
+            .find_map(|action| match action {
+                ServerAction::TransferTo { to_addr, token, amount } if *to_addr == forwarder => Some((*token, *amount)),
+                _ => None,
+            })
+            .ok_or(Error::MissingFeeTransferTo)?;
+
+        Ok(TokenTransfer::new(transfer_token, forwarder, Felt::from(transfer_amount)))
     }
 }
 
@@ -144,17 +210,44 @@ pub struct ExecutableTransaction {
 
     /// Execution parameters which should come out from the response of the [`buildTransaction`] endpoint
     pub parameters: ExecutionParameters,
+
+    /// Whitelisted privacy pool contract address
+    pub privacy_pool: Felt,
+
+    /// Pool's collect_fee cost in STRK, charged on top of gas for private transactions
+    pub privacy_pool_fee_amount: u128,
 }
 
 impl ExecutableTransaction {
     /// Estimate a sponsored transaction which is a transaction that will be paid by the relayer
     pub async fn estimate_sponsored_transaction(self, client: &Client, sponsor_metadata: Vec<Felt>) -> Result<EstimatedExecutableTransaction, Error> {
-        let calls = self.build_sponsored_calls(sponsor_metadata);
+        let proof_data = self.transaction.extract_proof_data();
 
-        let estimated_calls = client.estimate(&calls, self.parameters.tip()).await.map_err(|e| {
-            tracing::warn!(error = %e, "Sponsored transaction estimation failed");
-            e
-        })?;
+        let (calls, estimated_calls) = match &self.transaction {
+            ExecutableTransactionParameters::ApplyAction { apply_action } => {
+                let calls = self.build_private_sponsored_calls(None, apply_action, sponsor_metadata)?;
+                let estimated = client
+                    .estimate_for_private(&calls, self.parameters.tip(), proof_data.as_ref().expect("ApplyAction must have proof_data"))
+                    .await?;
+                (calls, estimated)
+            },
+            ExecutableTransactionParameters::InvokeAndApplyAction { invoke, apply_action } => {
+                let calls = self.build_private_sponsored_calls(Some(invoke), apply_action, sponsor_metadata)?;
+                let estimated = client
+                    .estimate_for_private(&calls, self.parameters.tip(), proof_data.as_ref().expect("InvokeAndApplyAction must have proof_data"))
+                    .await?;
+                (calls, estimated)
+            },
+            _ => {
+                let calls = self.build_sponsored_calls(sponsor_metadata);
+                let estimated = client.estimate(&calls, self.parameters.tip()).await.map_err(|e| {
+                    tracing::warn!(error = %e, "Sponsored transaction estimation failed");
+                    e
+                })?;
+                (calls, estimated)
+            },
+        };
+
         let fee_estimate = estimated_calls.estimate();
 
         // We recompute the real estimate fee. Validation step is not included in the fee estimate
@@ -167,11 +260,23 @@ impl ExecutableTransaction {
             })?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
-        let estimated_final_calls = calls.with_estimate(final_fee_estimate);
+        let estimated_final_calls = if let Some(proof_data) = proof_data {
+            calls.with_estimate_and_proof(final_fee_estimate, proof_data)
+        } else {
+            calls.with_estimate(final_fee_estimate)
+        };
         Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
     pub async fn estimate_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
+        if self.transaction.is_private() {
+            self.estimate_private_transaction(client).await
+        } else {
+            self.estimate_standard_transaction(client).await
+        }
+    }
+
+    async fn estimate_standard_transaction(self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
         let transfer = match &self.transaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.find_gas_token_transfer(self.forwarder)?,
@@ -210,12 +315,46 @@ impl ExecutableTransaction {
         Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
+    async fn estimate_private_transaction(&self, client: &Client) -> Result<EstimatedExecutableTransaction, Error> {
+        let (invoke, apply_action) = match &self.transaction {
+            ExecutableTransactionParameters::ApplyAction { apply_action } => (None, apply_action),
+            ExecutableTransactionParameters::InvokeAndApplyAction { invoke, apply_action } => (Some(invoke), apply_action),
+            _ => return Err(Error::MissingFeeTransferTo),
+        };
+        let transfer = apply_action.find_gas_token_transfer(self.forwarder)?;
+
+        let calls = self.build_private_calls(invoke, apply_action, &transfer)?;
+
+        let estimated_calls = client
+            .estimate_for_private(&calls, self.parameters.tip(), &apply_action.proof_data)
+            .await?;
+        let fee_estimate = estimated_calls.estimate();
+
+        let gas_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
+        let gas_estimate = fee_estimate.update_overall_fee(gas_fee_in_strk);
+        let required_fee_in_strk = gas_fee_in_strk + Felt::from(self.privacy_pool_fee_amount);
+
+        let token_price = client.price.fetch_token(transfer.token()).await?;
+        let required_fee_in_token = convert_strk_to_token(&token_price, required_fee_in_strk, true)?;
+
+        if required_fee_in_token > transfer.amount() {
+            return Err(Error::MaxAmountTooLow(required_fee_in_token.to_hex_string()));
+        }
+
+        let final_calls = calls.with_estimate_and_proof(gas_estimate, apply_action.proof_data.clone());
+
+        Ok(EstimatedExecutableTransaction(final_calls))
+    }
+
     async fn compute_paid_fee(&self, client: &Client, base_estimate: Felt) -> Result<Felt, Error> {
         match &self.transaction {
             ExecutableTransactionParameters::Deploy { .. } => Ok(client.compute_paid_fee_in_strk(base_estimate)),
             ExecutableTransactionParameters::Invoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
             ExecutableTransactionParameters::DirectInvoke { invoke, .. } => client.compute_paid_fee_with_overhead_in_strk(invoke.user, base_estimate).await,
+            ExecutableTransactionParameters::ApplyAction { .. } | ExecutableTransactionParameters::InvokeAndApplyAction { .. } => {
+                Ok(client.compute_paid_fee_in_strk(base_estimate))
+            },
         }
     }
 
@@ -239,6 +378,66 @@ impl ExecutableTransaction {
         Calls::new(calls)
     }
 
+    /// Validate and build the inner calls for a private transaction (optional execute_from_outside + apply_actions)
+    fn build_private_inner_calls(&self, invoke: Option<&ExecutableInvokeParameters>, apply_action: &ExecutableApplyActionParameters) -> Result<Vec<Call>, Error> {
+        let apply_call = &apply_action.apply_actions_call;
+
+        if self.privacy_pool != apply_call.to {
+            return Err(Error::PrivacyPoolNotWhitelisted);
+        }
+        if apply_call.selector != selector!("apply_actions") {
+            return Err(Error::InvalidApplyActionsSelector);
+        }
+
+        let mut calls = Vec::new();
+        if let Some(invoke) = invoke {
+            calls.push(invoke.message.to_call(invoke.user, &invoke.signature));
+        }
+        calls.push(apply_call.clone());
+        Ok(calls)
+    }
+
+    /// Build calls for a private sponsored transaction using `execute_sponsored_calls`
+    fn build_private_sponsored_calls(
+        &self,
+        invoke: Option<&ExecutableInvokeParameters>,
+        apply_action: &ExecutableApplyActionParameters,
+        sponsor_metadata: Vec<Felt>,
+    ) -> Result<Calls, Error> {
+        let inner_calls = self.build_private_inner_calls(invoke, apply_action)?;
+
+        let forwarder_call = Call {
+            to: self.forwarder,
+            selector: selector!("execute_sponsored_calls"),
+            calldata: CalldataBuilder::new().encode(&inner_calls).encode(&sponsor_metadata).build(),
+        };
+
+        Ok(Calls::new(vec![forwarder_call]))
+    }
+
+    /// Build calls for a gasless private transaction using `execute_calls`
+    fn build_private_calls(
+        &self,
+        invoke: Option<&ExecutableInvokeParameters>,
+        apply_action: &ExecutableApplyActionParameters,
+        transfer: &TokenTransfer,
+    ) -> Result<Calls, Error> {
+        let inner_calls = self.build_private_inner_calls(invoke, apply_action)?;
+
+        let forwarder_call = Call {
+            to: self.forwarder,
+            selector: selector!("execute_calls"),
+            calldata: CalldataBuilder::new()
+                .encode(&inner_calls)
+                .encode(&transfer.token())
+                .encode(&transfer.amount())
+                .encode(&Felt::ZERO)
+                .build(),
+        };
+
+        Ok(Calls::new(vec![forwarder_call]))
+    }
+
     fn build_deploy_call(&self) -> Option<Call> {
         match &self.transaction {
             ExecutableTransactionParameters::Deploy { deployment, .. } => Some(deployment.as_call()),
@@ -252,6 +451,7 @@ impl ExecutableTransaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.execute_from_outside_call.clone(),
+            ExecutableTransactionParameters::ApplyAction { .. } | ExecutableTransactionParameters::InvokeAndApplyAction { .. } => return None,
             _ => return None,
         };
 
@@ -272,6 +472,7 @@ impl ExecutableTransaction {
             ExecutableTransactionParameters::Invoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DeployAndInvoke { invoke, .. } => invoke.message.to_call(invoke.user, &invoke.signature),
             ExecutableTransactionParameters::DirectInvoke { invoke, .. } => invoke.execute_from_outside_call.clone(),
+            ExecutableTransactionParameters::ApplyAction { .. } | ExecutableTransactionParameters::InvokeAndApplyAction { .. } => return None,
             _ => return None,
         };
 
@@ -515,6 +716,8 @@ mod tests {
                 fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
                 time_bounds: None,
             },
+            privacy_pool: Felt::ZERO,
+            privacy_pool_fee_amount: 0,
         };
 
         let estimate = transaction.estimate_sponsored_transaction(&client, vec![]).await.unwrap();
@@ -575,6 +778,8 @@ mod tests {
                 },
                 time_bounds: None,
             },
+            privacy_pool: Felt::ZERO,
+            privacy_pool_fee_amount: 0,
         };
 
         let estimate = transaction.estimate_transaction(&client).await.unwrap();
@@ -656,6 +861,8 @@ mod tests {
                 },
                 time_bounds: None,
             },
+            privacy_pool: Felt::ZERO,
+            privacy_pool_fee_amount: 0,
         };
 
         let estimate = transaction.estimate_transaction(&client).await.unwrap();
