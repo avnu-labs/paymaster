@@ -9,8 +9,7 @@ pub struct ClassHash;
 impl ClassHash {
     pub const ARGENT_ACCOUNT: Felt = felt!("0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f");
     pub const BRAAVOS_ACCOUNT: Felt = Felt::from_raw([185241609756504736, 2778776175894593663, 3570588520378882234, 1478234888750183556]);
-    // TODO: revert
-    pub const FORWARDER: Felt = felt!("0x5a948a1ac99bef70779ed05ae2a8c0c27bec4d6b1d92350d48f9644b7a2edab");
+    pub const FORWARDER: Felt = felt!("0x06ef1e3f91ac361a2b84407a032e988799ddb42dda850ab22c20c0e21e4437f1");
 }
 
 /// Contract addresses for different networks
@@ -29,8 +28,7 @@ pub struct Token {
 
 impl Token {
     pub const ETH_ADDRESS: Felt = felt!("0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7");
-    // TODO: revert
-    pub const STRK_ADDRESS: Felt = felt!("0x70a5da4f557b77a9c54546e4bcc900806e28793d8e3eaaa207428d2387249b7");
+    pub const STRK_ADDRESS: Felt = felt!("0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d");
 
     pub const fn eth() -> Token {
         Token {
@@ -59,11 +57,6 @@ impl Token {
                 symbol: "USDC",
                 decimals: 6,
                 address: felt!("0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"),
-            },
-            ChainID::Integration => Token {
-                symbol: "TestToken1",
-                decimals: 6,
-                address: felt!("0x7b19e89252b1ee5d7ff07a0e0e278b16b058f322053f799469b969e31b82969"),
             },
         }
     }

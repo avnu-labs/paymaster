@@ -43,7 +43,6 @@ pub mod testing;
 
 mod client;
 
-pub const DEFAULT_INTEGRATION_SEPOLIA_RPC_ENDPOINT: &str = "http://34.170.239.64:9545/rpc/v0_10";
 pub const DEFAULT_SEPOLIA_RPC_ENDPOINT: &str = "https://rpc.starknet-testnet.lava.build/rpc/v0_9";
 pub const DEFAULT_MAINNET_RPC_ENDPOINT: &str = "https://rpc.starknet.lava.build/rpc/v0_9";
 
