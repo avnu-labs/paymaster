@@ -124,6 +124,12 @@ impl LockedRelayer {
                 Err(Error::InvalidNonce)
             },
             Err(e) => {
+                warn!(
+                    relayer = %self.relayer.address().to_fixed_hex_string(),
+                    nonce = %nonce.to_fixed_hex_string(),
+                    error = %e,
+                    "Relayer transaction execution failed"
+                );
                 metric!(counter[relayer_request_error] = 1, method = "execute", error = e.to_string());
 
                 Err(Error::Execution(e.to_string()))
@@ -140,12 +146,14 @@ impl LockedRelayer {
             return Ok(nonce);
         }
 
-        let nonce = self
-            .relayer
-            .account
-            .get_nonce()
-            .await
-            .map_err(|e| Error::Execution(e.to_string()))?;
+        let nonce = self.relayer.account.get_nonce().await.map_err(|e| {
+            warn!(
+                relayer = %self.relayer.address().to_fixed_hex_string(),
+                error = %e,
+                "Failed to fetch relayer nonce"
+            );
+            Error::Execution(e.to_string())
+        })?;
 
         self.lock.nonce = Some(nonce);
         Ok(nonce)

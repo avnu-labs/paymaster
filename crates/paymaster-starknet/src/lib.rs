@@ -253,7 +253,11 @@ impl Client {
     /// Fetch the nonce of the given `user`
     #[instrument(name = "fetch_nonce", skip(self))]
     pub async fn fetch_nonce(&self, user: ContractAddress) -> Result<Felt, Error> {
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.get_nonce(BlockId::Tag(BlockTag::PreConfirmed), user).await));
+        let (result, duration) = measure_duration!(self.inner.get_nonce(BlockId::Tag(BlockTag::PreConfirmed), user).await);
+
+        if let Err(ref e) = result {
+            tracing::warn!(contract_address = %user.to_fixed_hex_string(), error = %e, "starknet_getNonce failed");
+        }
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "get_nonce");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "get_nonce");
@@ -265,7 +269,16 @@ impl Client {
     #[instrument(name = "call", skip(self))]
     pub async fn call(&self, call: &FunctionCall) -> Result<Vec<Felt>, Error> {
         let block = BlockId::Tag(BlockTag::PreConfirmed);
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.call(call, block).await));
+        let (result, duration) = measure_duration!(self.inner.call(call, block).await);
+
+        if let Err(ref e) = result {
+            tracing::warn!(
+                contract_address = %call.contract_address.to_fixed_hex_string(),
+                entry_point_selector = %call.entry_point_selector.to_fixed_hex_string(),
+                error = %e,
+                "starknet_call failed"
+            );
+        }
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "call");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "call");
@@ -279,7 +292,11 @@ impl Client {
         let block = BlockId::Tag(BlockTag::PreConfirmed);
 
         // Estimate fees
-        let (result, duration) = measure_duration!(log_if_error!(self.inner.estimate_fee(transactions, vec![SkipValidate], block).await));
+        let (result, duration) = measure_duration!(self.inner.estimate_fee(transactions, vec![SkipValidate], block).await);
+
+        if let Err(ref e) = result {
+            tracing::warn!(error = %e, "starknet_estimateFee failed");
+        }
 
         metric!(histogram[starknet_rpc] = duration.as_millis(), method = "estimate_transactions");
         metric!(on error result => counter [ starknet_rpc_error ] = 1, method = "estimate_transactions");

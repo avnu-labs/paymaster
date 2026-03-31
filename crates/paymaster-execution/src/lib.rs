@@ -137,11 +137,16 @@ impl Client {
     // Note that if the transaction fails for a differant reason than an invalid nonce, this function returns the
     // error.
     async fn execute_with_retries(&self, relayer: &mut LockedRelayer, calls: &EstimatedCalls, n_retries: usize) -> Result<InvokeTransactionResult, Error> {
-        for _ in 0..n_retries {
+        for attempt in 1..=n_retries {
             match relayer.execute(calls).await {
                 Ok(result) => return Ok(result),
-                Err(paymaster_relayer::Error::InvalidNonce) => {},
-                Err(e) => return Err(Error::Execution(e.to_string())),
+                Err(paymaster_relayer::Error::InvalidNonce) => {
+                    tracing::warn!(attempt, n_retries, relayer = %relayer.address().to_fixed_hex_string(), "Invalid nonce, retrying");
+                },
+                Err(e) => {
+                    tracing::warn!(attempt, relayer = %relayer.address().to_fixed_hex_string(), error = %e, "Execution failed (non-retryable)");
+                    return Err(Error::Execution(e.to_string()));
+                }
             }
         }
 
