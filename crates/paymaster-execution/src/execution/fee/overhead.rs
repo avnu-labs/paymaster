@@ -53,7 +53,7 @@ impl ValidationGasOverhead {
             Err(e) => {
                 tracing::debug!(user = %user.to_fixed_hex_string(), error = %e, "get_signers failed (expected for non-Braavos)");
                 Ok(Self::none())
-            }
+            },
         }
     }
 }

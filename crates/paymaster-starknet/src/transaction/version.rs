@@ -102,7 +102,7 @@ impl PaymasterVersion {
                     "supports_interface call failed"
                 );
                 Err(Error::Starknet(e.to_string()))
-            }
+            },
         }
     }
 }

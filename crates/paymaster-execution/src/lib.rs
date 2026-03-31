@@ -146,7 +146,7 @@ impl Client {
                 Err(e) => {
                     tracing::warn!(attempt, relayer = %relayer.address().to_fixed_hex_string(), error = %e, "Execution failed (non-retryable)");
                     return Err(Error::Execution(e.to_string()));
-                }
+                },
             }
         }
 
