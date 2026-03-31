@@ -153,7 +153,7 @@ mod ExecuteSponsored {
     }
 }
 
-mod ExecuteCalls {
+mod ExecutePrivate {
     use avnu_lib::interfaces::erc20::IERC20DispatcherTrait;
     use starknet::account::Call;
     use super::{
@@ -189,7 +189,7 @@ mod ExecuteCalls {
         set_contract_address(caller);
 
         // When
-        let result = forwarder.execute_calls(calls, gas_token_address, gas_amount);
+        let result = forwarder.execute_private(calls, gas_token_address, gas_amount);
 
         // Then
         assert(result == true, 'invalid result');
@@ -228,7 +228,7 @@ mod ExecuteCalls {
         set_contract_address(caller);
 
         // When
-        let result = forwarder.execute_calls(calls, gas_token_address, gas_amount);
+        let result = forwarder.execute_private(calls, gas_token_address, gas_amount);
 
         // Then
         assert(result == true, 'invalid result');
@@ -252,7 +252,7 @@ mod ExecuteCalls {
         set_contract_address(contract_address_const::<0x1234>());
 
         // When & Then
-        forwarder.execute_calls(calls, gas_token_address, 1_u256);
+        forwarder.execute_private(calls, gas_token_address, 1_u256);
     }
 
     #[test]
@@ -278,20 +278,24 @@ mod ExecuteCalls {
         set_contract_address(caller);
 
         // When & Then
-        forwarder.execute_calls(calls, gas_token_address, 5_u256);
+        forwarder.execute_private(calls, gas_token_address, 5_u256);
     }
 }
 
-mod ExecuteSponsoredCalls {
+mod ExecutePrivateSponsored {
+    use avnu_lib::interfaces::erc20::IERC20DispatcherTrait;
     use starknet::account::Call;
     use super::{
         IForwarderDispatcherTrait, IOwnableDispatcherTrait, IWhitelistDispatcherTrait, contract_address_const, deploy_forwarder,
-        deploy_mock_account, set_contract_address,
+        deploy_mock_account, deploy_mock_token, set_contract_address,
     };
+
+    // selector!("mint")
+    const MINT_SELECTOR: felt252 = 0x02f0b3c5710379609eb5495f1ecd348cb28167711b73609fe565a72734550354;
 
     #[test]
     #[available_gas(2000000000)]
-    fn should_execute_single_call() {
+    fn should_execute_without_pool_fee() {
         // Given
         let (forwarder, ownable, whitelist) = deploy_forwarder();
         let caller = contract_address_const::<0x999>();
@@ -299,15 +303,15 @@ mod ExecuteSponsoredCalls {
         set_contract_address(ownable.get_owner());
         whitelist.set_whitelisted_address(caller, true);
         let account = deploy_mock_account();
-        // name() selector
         let entrypoint: felt252 = 0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60;
         let calls: Array<Call> = array![
             Call { to: account.contract_address, selector: entrypoint, calldata: array![].span() },
         ];
+        let gas_token_address = contract_address_const::<0x0>();
         set_contract_address(caller);
 
         // When
-        let result = forwarder.execute_sponsored_calls(calls, sponsor_metadata);
+        let result = forwarder.execute_private_sponsored(calls, gas_token_address, 0_u256, sponsor_metadata);
 
         // Then
         assert(result == true, 'invalid result');
@@ -315,26 +319,64 @@ mod ExecuteSponsoredCalls {
 
     #[test]
     #[available_gas(2000000000)]
-    fn should_execute_multiple_calls() {
+    fn should_execute_and_collect_pool_fee() {
         // Given
         let (forwarder, ownable, whitelist) = deploy_forwarder();
         let caller = contract_address_const::<0x999>();
         let sponsor_metadata: Array<felt252> = array!['SPONSOR_ID'];
         set_contract_address(ownable.get_owner());
         whitelist.set_whitelisted_address(caller, true);
-        let account = deploy_mock_account();
-        let entrypoint: felt252 = 0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60;
+        let gas_fees_recipient = forwarder.get_gas_fees_recipient();
+        let gas_token = deploy_mock_token(contract_address_const::<0x0>(), 0);
+        let gas_token_address = gas_token.contract_address;
+        let pool_fee: u256 = 3_u256;
+
+        // Calls: mint pool_fee tokens to the forwarder (simulates TransferTo from apply_actions)
         let calls: Array<Call> = array![
-            Call { to: account.contract_address, selector: entrypoint, calldata: array![].span() },
-            Call { to: account.contract_address, selector: entrypoint, calldata: array![].span() },
+            Call {
+                to: gas_token_address,
+                selector: MINT_SELECTOR,
+                calldata: array![forwarder.contract_address.into(), 3, 0].span(),
+            },
         ];
         set_contract_address(caller);
 
         // When
-        let result = forwarder.execute_sponsored_calls(calls, sponsor_metadata);
+        let result = forwarder.execute_private_sponsored(calls, gas_token_address, pool_fee, sponsor_metadata);
 
         // Then
         assert(result == true, 'invalid result');
+        let recipient_balance = gas_token.balanceOf(gas_fees_recipient);
+        assert(recipient_balance == pool_fee, 'invalid recipient balance');
+        let forwarder_balance = gas_token.balanceOf(forwarder.contract_address);
+        assert(forwarder_balance == 0_u256, 'forwarder should be empty');
+    }
+
+    #[test]
+    #[available_gas(2000000000)]
+    #[should_panic(expected: ('Insufficient pool fee payment', 'ENTRYPOINT_FAILED'))]
+    fn should_fail_when_insufficient_pool_fee() {
+        // Given
+        let (forwarder, ownable, whitelist) = deploy_forwarder();
+        let caller = contract_address_const::<0x999>();
+        let sponsor_metadata: Array<felt252> = array!['SPONSOR_ID'];
+        set_contract_address(ownable.get_owner());
+        whitelist.set_whitelisted_address(caller, true);
+        let gas_token = deploy_mock_token(contract_address_const::<0x0>(), 0);
+        let gas_token_address = gas_token.contract_address;
+
+        // Mint only 2 tokens but require 5
+        let calls: Array<Call> = array![
+            Call {
+                to: gas_token_address,
+                selector: MINT_SELECTOR,
+                calldata: array![forwarder.contract_address.into(), 2, 0].span(),
+            },
+        ];
+        set_contract_address(caller);
+
+        // When & Then
+        forwarder.execute_private_sponsored(calls, gas_token_address, 5_u256, sponsor_metadata);
     }
 
     #[test]
@@ -347,9 +389,10 @@ mod ExecuteSponsoredCalls {
         let calls: Array<Call> = array![
             Call { to: contract_address_const::<0x1>(), selector: 0x0, calldata: array![].span() },
         ];
+        let gas_token_address = contract_address_const::<0x0>();
         set_contract_address(contract_address_const::<0x1234>());
 
         // When & Then
-        forwarder.execute_sponsored_calls(calls, sponsor_metadata);
+        forwarder.execute_private_sponsored(calls, gas_token_address, 0_u256, sponsor_metadata);
     }
 }

@@ -375,6 +375,17 @@ impl PrivateTransaction {
             None
         };
 
+        // In sponsored mode the relayer covers gas but the user still pays the pool fee
+        let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
+            if self.pool_fee_amount > 0 {
+                convert_strk_to_token(&token, Felt::from(self.pool_fee_amount), true)?
+            } else {
+                Felt::ZERO
+            }
+        } else {
+            suggested_max_fee_in_gas_token
+        };
+
         Ok(EstimatedPrivateTransaction {
             parameters: self.parameters,
             fee_estimate: FeeEstimate {
@@ -387,7 +398,7 @@ impl PrivateTransaction {
             fee_action: FeeAction::Withdraw {
                 recipient: self.forwarder,
                 token: gas_token,
-                amount: suggested_max_fee_in_gas_token,
+                amount: fee_action_amount,
             },
             typed_data,
         })

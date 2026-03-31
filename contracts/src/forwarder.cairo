@@ -20,16 +20,18 @@ pub trait IForwarder<TContractState> {
         calldata: Array<felt252>,
         sponsor_metadata: Array<felt252>,
     ) -> bool;
-    fn execute_sponsored_calls(
-        ref self: TContractState,
-        calls: Array<Call>,
-        sponsor_metadata: Array<felt252>,
-    ) -> bool;
-    fn execute_calls(
+    fn execute_private(
         ref self: TContractState,
         calls: Array<Call>,
         gas_token_address: ContractAddress,
         gas_amount: u256,
+    ) -> bool;
+    fn execute_private_sponsored(
+        ref self: TContractState,
+        calls: Array<Call>,
+        gas_token_address: ContractAddress,
+        gas_amount: u256,
+        sponsor_metadata: Array<felt252>,
     ) -> bool;
 }
 
@@ -151,26 +153,7 @@ pub mod Forwarder {
             true
         }
 
-        fn execute_sponsored_calls(
-            ref self: ContractState,
-            calls: Array<Call>,
-            sponsor_metadata: Array<felt252>,
-        ) -> bool {
-            // Check if caller is whitelisted
-            let caller = get_caller_address();
-            assert(self.whitelist.is_whitelisted(caller), 'Caller is not whitelisted');
-
-            // Execute each call
-            for call in calls {
-                call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
-            };
-
-            // Emit event
-            self.emit(SponsoredTransaction { user_address: caller, sponsor_metadata });
-            true
-        }
-
-        fn execute_calls(
+        fn execute_private(
             ref self: ContractState,
             calls: Array<Call>,
             gas_token_address: ContractAddress,
@@ -197,6 +180,38 @@ pub mod Forwarder {
             let gas_fees_recipient = self.get_gas_fees_recipient();
             gas_token.transfer(gas_fees_recipient, gas_amount);
 
+            true
+        }
+
+        fn execute_private_sponsored(
+            ref self: ContractState,
+            calls: Array<Call>,
+            gas_token_address: ContractAddress,
+            gas_amount: u256,
+            sponsor_metadata: Array<felt252>,
+        ) -> bool {
+            // Check if caller is whitelisted
+            let caller = get_caller_address();
+            assert(self.whitelist.is_whitelisted(caller), 'Caller is not whitelisted');
+
+            let contract_address = get_contract_address();
+
+            // Execute each call
+            for call in calls {
+                call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
+            };
+
+            // Collect pool fee if any
+            if gas_amount > 0 {
+                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
+                let balance_after = gas_token.balanceOf(contract_address);
+                assert(balance_after >= gas_amount, 'Insufficient pool fee payment');
+                let gas_fees_recipient = self.get_gas_fees_recipient();
+                gas_token.transfer(gas_fees_recipient, gas_amount);
+            }
+
+            // Emit event
+            self.emit(SponsoredTransaction { user_address: caller, sponsor_metadata });
             true
         }
     }

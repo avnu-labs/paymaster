@@ -260,6 +260,22 @@ impl ExecutableTransaction {
             })?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
+        // Validate pool fee transfer for private sponsored transactions
+        if self.privacy_pool_fee_amount > 0 {
+            if let Some(apply_action) = match &self.transaction {
+                ExecutableTransactionParameters::ApplyAction { apply_action } => Some(apply_action),
+                ExecutableTransactionParameters::InvokeAndApplyAction { apply_action, .. } => Some(apply_action),
+                _ => None,
+            } {
+                let transfer = apply_action.find_gas_token_transfer(self.forwarder)?;
+                let token_price = client.price.fetch_token(transfer.token()).await?;
+                let pool_fee_in_token = convert_strk_to_token(&token_price, Felt::from(self.privacy_pool_fee_amount), true)?;
+                if pool_fee_in_token > transfer.amount() {
+                    return Err(Error::PoolFeeTooLow(pool_fee_in_token.to_hex_string()));
+                }
+            }
+        }
+
         let estimated_final_calls = if let Some(proof_data) = proof_data {
             calls.with_estimate_and_proof(final_fee_estimate, proof_data)
         } else {
@@ -397,7 +413,7 @@ impl ExecutableTransaction {
         Ok(calls)
     }
 
-    /// Build calls for a private sponsored transaction using `execute_sponsored_calls`
+    /// Build calls for a private sponsored transaction using `execute_private_sponsored`
     fn build_private_sponsored_calls(
         &self,
         invoke: Option<&ExecutableInvokeParameters>,
@@ -406,16 +422,30 @@ impl ExecutableTransaction {
     ) -> Result<Calls, Error> {
         let inner_calls = self.build_private_inner_calls(invoke, apply_action)?;
 
+        // Extract pool fee transfer from apply_actions calldata (if pool fee > 0)
+        let (pool_fee_token, pool_fee_amount) = if self.privacy_pool_fee_amount > 0 {
+            let transfer = apply_action.find_gas_token_transfer(self.forwarder)?;
+            (transfer.token(), transfer.amount())
+        } else {
+            (Felt::ZERO, Felt::ZERO)
+        };
+
         let forwarder_call = Call {
             to: self.forwarder,
-            selector: selector!("execute_sponsored_calls"),
-            calldata: CalldataBuilder::new().encode(&inner_calls).encode(&sponsor_metadata).build(),
+            selector: selector!("execute_private_sponsored"),
+            calldata: CalldataBuilder::new()
+                .encode(&inner_calls)
+                .encode(&pool_fee_token)
+                .encode(&pool_fee_amount)
+                .encode(&Felt::ZERO)
+                .encode(&sponsor_metadata)
+                .build(),
         };
 
         Ok(Calls::new(vec![forwarder_call]))
     }
 
-    /// Build calls for a gasless private transaction using `execute_calls`
+    /// Build calls for a gasless private transaction using `execute_private`
     fn build_private_calls(
         &self,
         invoke: Option<&ExecutableInvokeParameters>,
@@ -426,7 +456,7 @@ impl ExecutableTransaction {
 
         let forwarder_call = Call {
             to: self.forwarder,
-            selector: selector!("execute_calls"),
+            selector: selector!("execute_private"),
             calldata: CalldataBuilder::new()
                 .encode(&inner_calls)
                 .encode(&transfer.token())

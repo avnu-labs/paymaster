@@ -38,6 +38,9 @@ pub enum Error {
     #[error("max amount of gas token too low. Expected at least {0}")]
     MaxAmountTooLow(String),
 
+    #[error("pool fee amount too low. Expected at least {0}")]
+    PoolFeeTooLow(String),
+
     #[error("execution error {0}")]
     Execution(String),
 }

@@ -87,6 +87,9 @@ pub enum Error {
     #[error("max amount too low")]
     MaxAmountTooLow,
 
+    #[error("pool fee too low")]
+    PoolFeeTooLow,
+
     #[error("privacy transactions require sponsoring")]
     PrivacyRequiresSponsoring,
 
@@ -134,6 +137,7 @@ impl From<PaymasterExecutionError> for Error {
             PaymasterExecutionError::MissingFeeTransferTo => Self::MissingFeeTransferTo,
             PaymasterExecutionError::CalldataParsing(_) => Self::CalldataParsing,
             PaymasterExecutionError::MaxAmountTooLow(_) => Self::MaxAmountTooLow,
+            PaymasterExecutionError::PoolFeeTooLow(_) => Self::PoolFeeTooLow,
             other => Self::Execution(ContractExecutionError::Message(other.to_string())),
         }
     }
@@ -158,6 +162,7 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::PrivacyProofMissing => ErrorObject::borrowed(161, "An error occurred (PRIVACY_PROOF_MISSING)", None),
             Error::MissingFeeTransferTo => ErrorObject::borrowed(165, "An error occurred (MISSING_FEE_TRANSFER_TO)", None),
             Error::CalldataParsing => ErrorObject::borrowed(166, "An error occurred (CALLDATA_PARSING)", None),
+            Error::PoolFeeTooLow => ErrorObject::borrowed(167, "An error occurred (POOL_FEE_TOO_LOW)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),
