@@ -1,6 +1,5 @@
 use starknet::core::types::{FeeEstimate, Felt};
 
-use crate::gas::BlockGasPrice;
 use crate::Error;
 
 #[derive(Debug, Clone)]
@@ -31,36 +30,6 @@ impl TransactionGasEstimate {
             gas_estimate_multiplier: 1.5,
             gas_price_estimate_multiplier: 1.5,
         }
-    }
-
-    /// Create a gas estimate from block gas prices with fixed generous gas consumption.
-    /// Used for privacy pool transactions where fee estimation via simulation is not
-    /// supported by the node (proof_facts are rejected during starknet_estimateFee).
-    pub fn from_block_gas_prices(gas_prices: BlockGasPrice, tip: u64) -> Result<Self, Error> {
-        // Fixed generous gas consumption for privacy pool transactions.
-        // Based on observed actual consumption: ~80M l2_gas, ~2000 l1_data_gas.
-        const L2_GAS_CONSUMED: u64 = 200_000_000;
-        const L1_GAS_CONSUMED: u64 = 0;
-        const L1_DATA_GAS_CONSUMED: u64 = 5_000;
-
-        let l1_gas_price = crate::math::felt_to_u128(gas_prices.l1_gas_price)?;
-        let l2_gas_price = crate::math::felt_to_u128(gas_prices.l2_gas_price)?;
-        let l1_data_gas_price = crate::math::felt_to_u128(gas_prices.l1_data_gas_price)?;
-
-        let overall_fee = L1_GAS_CONSUMED as u128 * l1_gas_price + L2_GAS_CONSUMED as u128 * l2_gas_price + L1_DATA_GAS_CONSUMED as u128 * l1_data_gas_price;
-
-        Ok(Self {
-            overall_fee,
-            tip,
-            l1_gas_consumed: L1_GAS_CONSUMED,
-            l1_gas_price,
-            l2_gas_consumed: L2_GAS_CONSUMED,
-            l2_gas_price,
-            l1_data_gas_consumed: L1_DATA_GAS_CONSUMED,
-            l1_data_gas_price,
-            gas_estimate_multiplier: 1.5,
-            gas_price_estimate_multiplier: 1.5,
-        })
     }
 
     pub fn update_overall_fee(self, overall_fee: Felt) -> Self {

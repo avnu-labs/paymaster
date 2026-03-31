@@ -357,9 +357,12 @@ impl ExecutableTransaction {
             return Err(Error::MaxAmountTooLow(required_fee_in_token.to_hex_string()));
         }
 
-        let final_calls = calls.with_estimate_and_proof(gas_estimate, apply_action.proof_data.clone());
+        // Rebuild calls with the real fee amount so the forwarder only transfers the actual cost
+        let real_transfer = TokenTransfer::new(transfer.token(), self.forwarder, required_fee_in_token);
+        let final_calls = self.build_private_calls(invoke, apply_action, &real_transfer)?;
+        let estimated_final_calls = final_calls.with_estimate_and_proof(gas_estimate, apply_action.proof_data.clone());
 
-        Ok(EstimatedExecutableTransaction(final_calls))
+        Ok(EstimatedExecutableTransaction(estimated_final_calls))
     }
 
     async fn compute_paid_fee(&self, client: &Client, base_estimate: Felt) -> Result<Felt, Error> {

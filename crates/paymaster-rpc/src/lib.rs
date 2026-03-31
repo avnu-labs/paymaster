@@ -12,7 +12,7 @@ use starknet::core::types::ContractExecutionError;
 use thiserror::Error;
 
 mod context;
-pub use context::{Configuration, RPCConfiguration};
+pub use context::{Configuration, RPCConfiguration, DEFAULT_PRIVACY_GAS_OVERHEAD};
 
 mod endpoint;
 use crate::endpoint::execute_raw::{ExecuteDirectRequest, ExecuteDirectResponse};

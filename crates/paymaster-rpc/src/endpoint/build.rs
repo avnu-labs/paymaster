@@ -264,6 +264,7 @@ async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> 
         forwarder: ctx.configuration.forwarder,
         parameters: request.parameters.into(),
         pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        privacy_gas_overhead: ctx.configuration.privacy_gas_overhead,
         user_calls,
     };
 
