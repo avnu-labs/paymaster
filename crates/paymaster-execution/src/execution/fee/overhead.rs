@@ -49,8 +49,11 @@ impl ValidationGasOverhead {
 
         match client.call(&call).await {
             Ok(response) if response.len() > 4 => Ok(Self::braavos()),
-            Ok(_) | Err(paymaster_starknet::Error::ContractNotFound) | Err(paymaster_starknet::Error::Contract(_)) => Ok(Self::none()),
-            Err(_) => Ok(Self::none()),
+            Ok(_) => Ok(Self::none()),
+            Err(e) => {
+                tracing::debug!(user = %user.to_fixed_hex_string(), error = %e, "get_signers failed (expected for non-Braavos)");
+                Ok(Self::none())
+            },
         }
     }
 }

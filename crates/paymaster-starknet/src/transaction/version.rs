@@ -4,6 +4,7 @@ use paymaster_common::concurrency::ConcurrentExecutor;
 use paymaster_common::task;
 use starknet::core::types::{Felt, FunctionCall};
 use starknet::macros::selector;
+use tracing::warn;
 
 use crate::contract::ContractClass;
 use crate::{Client, Error};
@@ -93,7 +94,15 @@ impl PaymasterVersion {
 
         match response {
             Ok(value) => Ok(value.first() == Some(&Felt::ONE)),
-            Err(e) => Err(Error::Starknet(e.to_string())),
+            Err(e) => {
+                warn!(
+                    user = %user.to_fixed_hex_string(),
+                    interface_id = %interface_id.to_fixed_hex_string(),
+                    error = %e,
+                    "supports_interface call failed"
+                );
+                Err(Error::Starknet(e.to_string()))
+            },
         }
     }
 }
