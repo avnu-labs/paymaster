@@ -1506,6 +1506,14 @@
         "code": 166,
         "message": "An error occurred (CALLDATA_PARSING)",
         "data": "string"
+      },
+      "POOL_FEE_TOO_LOW": {
+        "code": 167,
+        "message": "An error occurred (POOL_FEE_TOO_LOW)"
+      },
+      "PRIVACY_PROOF_MISSING": {
+        "code": 168,
+        "message": "An error occurred (PRIVACY_PROOF_MISSING)"
       }
     }
   }

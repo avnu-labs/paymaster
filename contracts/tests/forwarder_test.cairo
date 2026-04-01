@@ -327,7 +327,8 @@ mod ExecutePrivateSponsored {
         set_contract_address(ownable.get_owner());
         whitelist.set_whitelisted_address(caller, true);
         let gas_fees_recipient = forwarder.get_gas_fees_recipient();
-        let gas_token = deploy_mock_token(contract_address_const::<0x0>(), 0);
+        // Deploy token with pre-existing balance on forwarder (simulates STRK held for pool fees)
+        let gas_token = deploy_mock_token(forwarder.contract_address, 10);
         let gas_token_address = gas_token.contract_address;
         let pool_fee: u256 = 3_u256;
 
@@ -348,8 +349,9 @@ mod ExecutePrivateSponsored {
         assert(result == true, 'invalid result');
         let recipient_balance = gas_token.balanceOf(gas_fees_recipient);
         assert(recipient_balance == pool_fee, 'invalid recipient balance');
+        // Forwarder keeps pre-existing balance (10) but pool fee (3) was transferred
         let forwarder_balance = gas_token.balanceOf(forwarder.contract_address);
-        assert(forwarder_balance == 0_u256, 'forwarder should be empty');
+        assert(forwarder_balance == 10_u256, 'invalid forwarder balance');
     }
 
     #[test]
@@ -362,10 +364,11 @@ mod ExecutePrivateSponsored {
         let sponsor_metadata: Array<felt252> = array!['SPONSOR_ID'];
         set_contract_address(ownable.get_owner());
         whitelist.set_whitelisted_address(caller, true);
-        let gas_token = deploy_mock_token(contract_address_const::<0x0>(), 0);
+        // Forwarder has pre-existing balance of 10 — must not count toward pool fee
+        let gas_token = deploy_mock_token(forwarder.contract_address, 10);
         let gas_token_address = gas_token.contract_address;
 
-        // Mint only 2 tokens but require 5
+        // Mint only 2 tokens but require 5 — pre-existing balance must not help
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,

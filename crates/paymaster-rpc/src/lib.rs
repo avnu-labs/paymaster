@@ -159,7 +159,7 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::InvalidTimeBounds => ErrorObject::borrowed(157, "An error occurred (INVALID_TIME_BOUNDS)", None),
             Error::InvalidDeploymentData => ErrorObject::borrowed(158, "An error occurred (INVALID_DEPLOYMENT_DATA)", None),
             Error::PrivacyRequiresSponsoring => ErrorObject::borrowed(159, "An error occurred (PRIVACY_REQUIRES_SPONSORING)", None),
-            Error::PrivacyProofMissing => ErrorObject::borrowed(161, "An error occurred (PRIVACY_PROOF_MISSING)", None),
+            Error::PrivacyProofMissing => ErrorObject::borrowed(168, "An error occurred (PRIVACY_PROOF_MISSING)", None),
             Error::MissingFeeTransferTo => ErrorObject::borrowed(165, "An error occurred (MISSING_FEE_TRANSFER_TO)", None),
             Error::CalldataParsing => ErrorObject::borrowed(166, "An error occurred (CALLDATA_PARSING)", None),
             Error::PoolFeeTooLow => ErrorObject::borrowed(167, "An error occurred (POOL_FEE_TOO_LOW)", None),

@@ -196,6 +196,14 @@ pub mod Forwarder {
 
             let contract_address = get_contract_address();
 
+            // Snapshot balance before execution so we can verify the pool fee was actually paid
+            let balance_before = if gas_amount > 0 {
+                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
+                gas_token.balanceOf(contract_address)
+            } else {
+                0_u256
+            };
+
             // Execute each call
             for call in calls {
                 call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
@@ -205,7 +213,7 @@ pub mod Forwarder {
             if gas_amount > 0 {
                 let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
                 let balance_after = gas_token.balanceOf(contract_address);
-                assert(balance_after >= gas_amount, 'Insufficient pool fee payment');
+                assert(balance_after >= balance_before + gas_amount, 'Insufficient pool fee payment');
                 let gas_fees_recipient = self.get_gas_fees_recipient();
                 gas_token.transfer(gas_fees_recipient, gas_amount);
             }

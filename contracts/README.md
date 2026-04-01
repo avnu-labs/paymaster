@@ -6,8 +6,8 @@ It declares a simple Forwarder contract. This one exposes four entrypoints:
 
 - `execute`: It verifies if the caller is whitelisted (only whitelisted relayers can execute user's calls), executes user's calls and collect user's gas tokens
 - `execute_sponsored`: It does the same as `execute` but it doesn't collect user's gas tokens
-- `execute_sponsored_calls`: It executes a list of calls with sponsor metadata, used for sponsored privacy transactions where the wallet builds multiple calls (e.g., approve + apply_actions)
-- `execute_calls`: It executes a list of calls, verifies the forwarder received the expected gas token amount during execution, and transfers it to the gas fees recipient. Used for gasless private transactions
+- `execute_private_sponsored`: It executes a list of calls with sponsor metadata, collects pool fees if any, and emits a sponsored transaction event. Used for sponsored privacy transactions
+- `execute_private`: It executes a list of calls, verifies the forwarder received the expected gas token amount during execution, and transfers it to the gas fees recipient. Used for gasless private transactions
 
 Here is the interface of the Forwarder contract:
 
@@ -31,16 +31,18 @@ trait IForwarder<TContractState> {
         calldata: Array<felt252>,
         sponsor_metadata: Array<felt252>,
     ) -> bool;
-    fn execute_sponsored_calls(
-        ref self: TContractState,
-        calls: Array<Call>,
-        sponsor_metadata: Array<felt252>,
-    ) -> bool;
-    fn execute_calls(
+    fn execute_private(
         ref self: TContractState,
         calls: Array<Call>,
         gas_token_address: ContractAddress,
         gas_amount: u256,
+    ) -> bool;
+    fn execute_private_sponsored(
+        ref self: TContractState,
+        calls: Array<Call>,
+        gas_token_address: ContractAddress,
+        gas_amount: u256,
+        sponsor_metadata: Array<felt252>,
     ) -> bool;
 }
 ```
