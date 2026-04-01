@@ -65,7 +65,11 @@ impl Into<paymaster_rpc::Configuration> for Context {
                 .and_then(|s| s.parse::<u128>().ok())
                 .unwrap_or(0),
 
-            privacy_gas_overhead: self.configuration.privacy.gas_overhead.unwrap_or(paymaster_rpc::DEFAULT_PRIVACY_GAS_OVERHEAD),
+            privacy_gas_overhead: self
+                .configuration
+                .privacy
+                .gas_overhead
+                .unwrap_or(paymaster_rpc::DEFAULT_PRIVACY_GAS_OVERHEAD),
 
             max_fee_multiplier: self.configuration.max_fee_multiplier,
             provider_fee_overhead: self.configuration.provider_fee_overhead,

@@ -23,13 +23,14 @@ use paymaster_relayer::swap::client::SwapClientConfiguration;
 use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
 use paymaster_relayer::{Context as RelayerContext, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
 use paymaster_rpc::RPCConfiguration;
-use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, PrivacyConfiguration, PriceConfiguration, PriceOracleConfiguration, VerbosityConfiguration};
+use paymaster_service::core::context::configuration::{
+    Configuration as ServiceConfiguration, PriceConfiguration, PriceOracleConfiguration, PrivacyConfiguration, VerbosityConfiguration,
+};
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
 use paymaster_starknet::{
-    ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration, DEFAULT_MAINNET_RPC_ENDPOINT,
-    DEFAULT_SEPOLIA_RPC_ENDPOINT,
+    ChainID, Client, Configuration as StarknetConfiguration, Configuration, StarknetAccountConfiguration, DEFAULT_MAINNET_RPC_ENDPOINT, DEFAULT_SEPOLIA_RPC_ENDPOINT,
 };
 use starknet::accounts::ConnectedAccount;
 use starknet::core::types::{Call, Felt};
