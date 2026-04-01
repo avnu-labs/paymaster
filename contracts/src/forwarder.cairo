@@ -174,11 +174,12 @@ pub mod Forwarder {
 
             // Verify the forwarder received the expected gas funds
             let balance_after = gas_token.balanceOf(contract_address);
-            assert(balance_after >= balance_before + gas_amount, 'Insufficient gas payment');
+            let received = balance_after - balance_before;
+            assert(received >= gas_amount, 'Insufficient gas payment');
 
-            // Transfer gas fees to recipient
+            // Transfer all received funds to recipient (not just gas_amount)
             let gas_fees_recipient = self.get_gas_fees_recipient();
-            gas_token.transfer(gas_fees_recipient, gas_amount);
+            gas_token.transfer(gas_fees_recipient, received);
 
             true
         }
@@ -213,9 +214,10 @@ pub mod Forwarder {
             if gas_amount > 0 {
                 let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
                 let balance_after = gas_token.balanceOf(contract_address);
-                assert(balance_after >= balance_before + gas_amount, 'Insufficient pool fee payment');
+                let received = balance_after - balance_before;
+                assert(received >= gas_amount, 'Insufficient pool fee payment');
                 let gas_fees_recipient = self.get_gas_fees_recipient();
-                gas_token.transfer(gas_fees_recipient, gas_amount);
+                gas_token.transfer(gas_fees_recipient, received);
             }
 
             // Emit event

@@ -230,13 +230,12 @@ mod ExecutePrivate {
         // When
         let result = forwarder.execute_private(calls, gas_token_address, gas_amount);
 
-        // Then
+        // Then — all received tokens (5) are forwarded, not just gas_amount (3)
         assert(result == true, 'invalid result');
         let recipient_balance = gas_token.balanceOf(gas_fees_recipient);
-        assert(recipient_balance == gas_amount, 'invalid recipient balance');
-        // Forwarder keeps the excess (5 - 3 = 2)
+        assert(recipient_balance == 5_u256, 'invalid recipient balance');
         let forwarder_balance = gas_token.balanceOf(forwarder.contract_address);
-        assert(forwarder_balance == 2_u256, 'invalid forwarder balance');
+        assert(forwarder_balance == 0_u256, 'forwarder should be empty');
     }
 
     #[test]
