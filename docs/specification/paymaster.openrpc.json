@@ -577,6 +577,30 @@
             }
           },
           {
+            "title": "Sponsored private transaction",
+            "description": "Sponsored fee mode for private transactions where the relayer pays gas and the user chooses the pool fee token. Only valid for apply_action and invoke_and_apply_action transaction types",
+            "required": [
+              "mode",
+              "pool_fee_token"
+            ],
+            "properties": {
+              "mode": {
+                "const": ["sponsored_private"]
+              },
+              "pool_fee_token": {
+                "title": "Pool fee token",
+                "description": "The token address to pay the privacy pool fee in",
+                "$ref": "#/components/schemas/FELT"
+              },
+              "tip": {
+                "title": "Tip priority",
+                "description": "Optional tip priority for the transaction",
+                "type": "string",
+                "enum": ["low", "normal", "high"]
+              }
+            }
+          },
+          {
             "title": "Pay transaction in gas token",
             "description": "Default fee mode where the transaction is paid by the user in the given gas token",
             "required": [
@@ -584,7 +608,7 @@
               "gas_token"
             ],
             "properties": {
-              "mode": { 
+              "mode": {
                 "const": ["default"]
               },
               "gas_token": {
