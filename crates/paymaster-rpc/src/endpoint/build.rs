@@ -72,6 +72,10 @@ impl TransactionParameters {
             Self::InvokeAndApplyAction { invoke, .. } => &invoke.calls,
         }
     }
+
+    pub fn is_private(&self) -> bool {
+        matches!(self, Self::ApplyAction { .. } | Self::InvokeAndApplyAction { .. })
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -227,6 +231,10 @@ pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: Build
     // Do preliminary checks
     check_no_blacklisted_call(&request.transaction, &HashSet::new())?;
     check_is_supported_token(&request.parameters, &ctx.configuration.supported_tokens)?;
+
+    if request.parameters.fee_mode().is_sponsored_private() && !request.transaction.is_private() {
+        return Err(Error::SponsoredPrivateRequiresPrivacy);
+    }
 
     match &request.transaction {
         TransactionParameters::Deploy { .. } if request.parameters.fee_mode().is_sponsored() => build_deploy_sponsored(ctx, request).await,

@@ -33,6 +33,7 @@ pub fn check_is_supported_token(transaction: &ExecutionParameters, supported_tok
 }
 
 pub async fn check_is_allowed_fee_mode(ctx: &RequestContext<'_>, params: &ExecutionParameters) -> Result<(), Error> {
+    // Both sponsored and sponsored_private require API key validation
     if !params.fee_mode().is_sponsored() {
         return Ok(());
     }

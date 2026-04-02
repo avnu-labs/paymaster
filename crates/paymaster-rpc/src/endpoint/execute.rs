@@ -38,6 +38,12 @@ pub enum ExecutableTransactionParameters {
     },
 }
 
+impl ExecutableTransactionParameters {
+    pub fn is_private(&self) -> bool {
+        matches!(self, Self::ApplyAction { .. } | Self::InvokeAndApplyAction { .. })
+    }
+}
+
 impl TryFrom<ExecutableTransactionParameters> for paymaster_execution::ExecutableTransactionParameters {
     type Error = Error;
 
@@ -131,6 +137,10 @@ pub struct ExecuteResponse {
 
 pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest) -> Result<ExecuteResponse, Error> {
     check_service_is_available(ctx).await?;
+
+    if request.parameters.fee_mode().is_sponsored_private() && !request.transaction.is_private() {
+        return Err(Error::SponsoredPrivateRequiresPrivacy);
+    }
 
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;

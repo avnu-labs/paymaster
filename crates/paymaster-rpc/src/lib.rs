@@ -102,6 +102,9 @@ pub enum Error {
     #[error("failed to parse private transaction calldata")]
     CalldataParsing,
 
+    #[error("sponsored_private mode requires a private transaction")]
+    SponsoredPrivateRequiresPrivacy,
+
     #[error("{0:?}")]
     Execution(ContractExecutionError),
 }
@@ -163,6 +166,7 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::MissingFeeTransferTo => ErrorObject::borrowed(165, "An error occurred (MISSING_FEE_TRANSFER_TO)", None),
             Error::CalldataParsing => ErrorObject::borrowed(166, "An error occurred (CALLDATA_PARSING)", None),
             Error::PoolFeeTooLow => ErrorObject::borrowed(167, "An error occurred (POOL_FEE_TOO_LOW)", None),
+            Error::SponsoredPrivateRequiresPrivacy => ErrorObject::borrowed(168, "An error occurred (SPONSORED_PRIVATE_REQUIRES_PRIVACY)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),
