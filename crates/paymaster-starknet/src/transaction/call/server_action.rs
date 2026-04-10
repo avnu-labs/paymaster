@@ -28,13 +28,8 @@ pub enum ServerAction {
     },
     /// Variant 6: EmitDeposit { user_addr: ContractAddress, token: ContractAddress, amount: u128 }
     EmitDeposit { user_addr: Felt, token: Felt, amount: u128 },
-    /// Variant 7: EmitOpenNoteCreated { enc_recipient_addr: EncUserAddr(3 felts), depositor: ContractAddress, token: ContractAddress, note_id: felt252 }
-    EmitOpenNoteCreated {
-        enc_recipient_addr: [Felt; 3],
-        depositor: Felt,
-        token: Felt,
-        note_id: Felt,
-    },
+    /// Variant 7: EmitOpenNoteCreated { enc_recipient_addr: EncUserAddr(3 felts), token: ContractAddress, note_id: felt252 }
+    EmitOpenNoteCreated { enc_recipient_addr: [Felt; 3], token: Felt, note_id: Felt },
     /// Variant 8: EmitEncNoteCreated { note_id: felt252, packed_value: felt252 }
     EmitEncNoteCreated { note_id: Felt, packed_value: Felt },
     /// Variant 9: EmitNoteUsed { nullifier: felt252 }
@@ -171,12 +166,10 @@ fn parse_action(cursor: &mut Cursor) -> Result<ServerAction, ServerActionError> 
         },
         7 => {
             let enc_recipient_addr = cursor.next_array::<3>()?;
-            let depositor = cursor.next()?;
             let token = cursor.next()?;
             let note_id = cursor.next()?;
             Ok(ServerAction::EmitOpenNoteCreated {
                 enc_recipient_addr,
-                depositor,
                 token,
                 note_id,
             })
@@ -455,17 +448,8 @@ mod tests {
         let actions = parse_server_actions(&calldata).unwrap();
         assert!(matches!(&actions[0], ServerAction::EmitDeposit { amount: 75, .. }));
 
-        // EmitOpenNoteCreated (variant 7): 6 felts (3 for EncUserAddr + depositor + token + note_id)
-        let calldata = vec![
-            Felt::ONE,
-            Felt::from(7u64),
-            felt!("0x1"),
-            felt!("0x2"),
-            felt!("0x3"),
-            felt!("0x4"),
-            felt!("0x5"),
-            felt!("0x6"),
-        ];
+        // EmitOpenNoteCreated (variant 7): 5 felts (3 for EncUserAddr + token + note_id)
+        let calldata = vec![Felt::ONE, Felt::from(7u64), felt!("0x1"), felt!("0x2"), felt!("0x3"), felt!("0x4"), felt!("0x5")];
         let actions = parse_server_actions(&calldata).unwrap();
         assert!(matches!(&actions[0], ServerAction::EmitOpenNoteCreated { .. }));
     }
