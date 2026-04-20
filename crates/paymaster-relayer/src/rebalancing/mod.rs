@@ -332,8 +332,8 @@ impl RelayerRebalancingService {
             },
         };
 
-        // Reserve 1 STRK for gas fees - gas tank must always keep minimum balance for future transactions
-        let gas_reserve = paymaster_starknet::math::normalize_felt(1.0, 18);
+        // Reserve 50 STRK for gas fees - gas tank must always keep minimum balance for future transactions
+        let gas_reserve = paymaster_starknet::math::normalize_felt(50.0, 18);
         let total_amount_available = if gas_tank_strk_balance > gas_reserve {
             (gas_tank_strk_balance - gas_reserve) + additional_strk_balance
         } else {
