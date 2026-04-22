@@ -52,9 +52,24 @@ impl Into<paymaster_rpc::Configuration> for Context {
             rpc: self.configuration.rpc.clone(),
 
             forwarder: self.configuration.forwarder,
+            privacy_pool: self.configuration.privacy.pool,
             gas_tank: self.configuration.gas_tank,
 
             supported_tokens: self.configuration.supported_tokens.clone(),
+
+            privacy_pool_fee_amount: self
+                .configuration
+                .privacy
+                .pool_fee_amount
+                .as_deref()
+                .and_then(|s| s.parse::<u128>().ok())
+                .unwrap_or(0),
+
+            privacy_gas_overhead: self
+                .configuration
+                .privacy
+                .gas_overhead
+                .unwrap_or(paymaster_rpc::DEFAULT_PRIVACY_GAS_OVERHEAD),
 
             max_fee_multiplier: self.configuration.max_fee_multiplier,
             provider_fee_overhead: self.configuration.provider_fee_overhead,

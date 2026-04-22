@@ -1,13 +1,13 @@
 use paymaster_prices::math::convert_strk_to_token;
 use paymaster_starknet::transaction::{Calls, ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TokenTransfer};
 use paymaster_starknet::{ChainID, ContractAddress};
-use starknet::core::types::{BroadcastedTransaction, Felt};
+use starknet::core::types::{BroadcastedTransaction, Felt, TypedData};
 use starknet::macros::felt;
 use uuid::Uuid;
 
 use crate::diagnostics::DiagnosticClient;
 use crate::execution::deploy::DeploymentParameters;
-use crate::execution::fee::FeeEstimate;
+use crate::execution::fee::{FeeAction, FeeEstimate};
 use crate::execution::ExecutionParameters;
 use crate::{Client, Error};
 
@@ -304,6 +304,123 @@ impl VersionedTransaction {
         calls.push(TokenTransfer::new(self.parameters.gas_token(), self.forwarder, self.fee_estimate.suggested_max_fee_in_gas_token).to_call());
 
         calls
+    }
+}
+
+/// User calls to be included in a private transaction's execute_from_outside message.
+#[derive(Debug)]
+pub struct PrivateInvokeUserCalls {
+    pub user_address: Felt,
+    pub calls: Calls,
+}
+
+/// Paymaster transaction for private invoke flows that uses block gas prices instead of simulation.
+#[derive(Debug)]
+pub struct PrivateTransaction {
+    pub forwarder: ContractAddress,
+    pub parameters: ExecutionParameters,
+    pub pool_fee_amount: u128,
+    /// L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.)
+    pub privacy_gas_overhead: u64,
+    pub user_calls: Option<PrivateInvokeUserCalls>,
+}
+
+/// Estimated private transaction with fee details and the fee action the user must approve.
+#[derive(Debug)]
+pub struct EstimatedPrivateTransaction {
+    pub parameters: ExecutionParameters,
+    pub fee_estimate: FeeEstimate,
+    pub fee_action: FeeAction,
+    pub typed_data: Option<TypedData>,
+}
+
+impl PrivateTransaction {
+    /// Estimate the private transaction using real simulation for user calls
+    /// and a fixed overhead for privacy pool execution (proof verification, forwarder).
+    pub async fn estimate(self, client: &Client) -> Result<EstimatedPrivateTransaction, Error> {
+        if !self.parameters.time_bounds().is_valid() {
+            return Err(Error::InvalidTimeBound);
+        }
+
+        let gas_token = self.parameters.gas_token();
+        let token = client.price.fetch_token(gas_token).await?;
+
+        // Real estimate of user's calls via starknet_estimateFee
+        let user_calls_fee: u128 = if let Some(ref user_calls) = self.user_calls {
+            let mut estimate_calls = user_calls.calls.clone();
+            estimate_calls.push(TokenTransfer::new(gas_token, self.forwarder, Felt::ONE).to_call());
+            match client.estimate(&estimate_calls, self.parameters.tip()).await {
+                Ok(estimated) => estimated.estimate().overall_fee,
+                Err(e) => {
+                    tracing::warn!("Failed to estimate user calls for private transaction, falling back to overhead only: {e}");
+                    0
+                },
+            }
+        } else {
+            0
+        };
+
+        // Privacy pool overhead: proof verification, forwarder execution, execute_from_outside
+        let gas_prices = client.starknet.fetch_block_gas_price().await?;
+        let l2_gas_price = paymaster_starknet::math::felt_to_u128(gas_prices.l2_gas_price)?;
+        let privacy_overhead = self.privacy_gas_overhead as u128 * l2_gas_price;
+
+        let estimated_fee_in_strk = Felt::from(user_calls_fee + privacy_overhead);
+        let estimated_fee_in_gas_token = convert_strk_to_token(&token, estimated_fee_in_strk, true)?;
+
+        // Add pool fee (not multiplied — it's a fixed known cost)
+        let total_fee_in_strk = estimated_fee_in_strk + Felt::from(self.pool_fee_amount);
+
+        let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(estimated_fee_in_strk) + Felt::from(self.pool_fee_amount);
+        let suggested_max_fee_in_gas_token = convert_strk_to_token(&token, suggested_max_fee_in_strk, true)?;
+
+        let typed_data = if let Some(user_calls) = self.user_calls {
+            let version = client
+                .starknet
+                .resolve_paymaster_version_from_account(user_calls.user_address)
+                .await?;
+            let message = ExecuteFromOutsideMessage::new(
+                version,
+                ExecuteFromOutsideParameters {
+                    chain_id: *client.starknet.chain_id(),
+                    caller: self.forwarder,
+                    nonce: Felt::from(Uuid::new_v4().to_u128_le()),
+                    calls: user_calls.calls,
+                    time_bounds: self.parameters.time_bounds(),
+                },
+            );
+            Some(message.to_typed_data()?)
+        } else {
+            None
+        };
+
+        // In sponsored mode the relayer covers gas but the user still pays the pool fee
+        let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
+            if self.pool_fee_amount > 0 {
+                convert_strk_to_token(&token, Felt::from(self.pool_fee_amount), true)?
+            } else {
+                Felt::ZERO
+            }
+        } else {
+            suggested_max_fee_in_gas_token
+        };
+
+        Ok(EstimatedPrivateTransaction {
+            parameters: self.parameters,
+            fee_estimate: FeeEstimate {
+                gas_token_price_in_strk: token.price_in_strk,
+                estimated_fee_in_strk: total_fee_in_strk,
+                estimated_fee_in_gas_token,
+                suggested_max_fee_in_strk,
+                suggested_max_fee_in_gas_token,
+            },
+            fee_action: FeeAction::Withdraw {
+                recipient: self.forwarder,
+                token: gas_token,
+                amount: fee_action_amount,
+            },
+            typed_data,
+        })
     }
 }
 

@@ -35,4 +35,5 @@ paymaster-execution = { path = ".", features = ["testing"] }
 paymaster-starknet = { path = "../paymaster-starknet", features = ["testing"] }
 paymaster-prices = { path = "../paymaster-prices", features = ["testing"] }
 jsonrpsee = { workspace = true, features = ["client"] }
+base64 = { workspace = true }
 

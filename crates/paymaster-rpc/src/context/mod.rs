@@ -1,5 +1,5 @@
 mod configuration;
-pub use configuration::{Configuration, RPCConfiguration};
+pub use configuration::{Configuration, RPCConfiguration, DEFAULT_PRIVACY_GAS_OVERHEAD};
 use paymaster_execution::{Client as ExecutionClient, TransactionDuplicateFilter};
 use paymaster_prices::Client as PriceClient;
 use paymaster_sponsoring::Client as SponsoringClient;

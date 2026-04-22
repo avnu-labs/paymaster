@@ -142,6 +142,12 @@ pub enum FeeMode {
         #[serde(default)]
         tip: TipPriority,
     },
+    /// Sponsored fee mode for private transactions where the user chooses the pool fee token
+    SponsoredPrivate {
+        pool_fee_token: Felt,
+        #[serde(default)]
+        tip: TipPriority,
+    },
 }
 
 impl From<paymaster_execution::FeeMode> for FeeMode {
@@ -149,6 +155,7 @@ impl From<paymaster_execution::FeeMode> for FeeMode {
         match value {
             paymaster_execution::FeeMode::Sponsored { tip } => Self::Sponsored { tip: tip.into() },
             paymaster_execution::FeeMode::Default { gas_token, tip } => Self::Default { gas_token, tip: tip.into() },
+            paymaster_execution::FeeMode::SponsoredPrivate { pool_fee_token, tip } => Self::SponsoredPrivate { pool_fee_token, tip: tip.into() },
         }
     }
 }
@@ -158,6 +165,7 @@ impl From<FeeMode> for paymaster_execution::FeeMode {
         match value {
             FeeMode::Sponsored { tip } => Self::Sponsored { tip: tip.into() },
             FeeMode::Default { gas_token, tip } => Self::Default { gas_token, tip: tip.into() },
+            FeeMode::SponsoredPrivate { pool_fee_token, tip } => Self::SponsoredPrivate { pool_fee_token, tip: tip.into() },
         }
     }
 }
@@ -186,22 +194,29 @@ impl From<TipPriority> for paymaster_execution::TipPriority {
 
 impl FeeMode {
     pub fn is_sponsored(&self) -> bool {
-        matches!(self, Self::Sponsored { tip: _ })
+        matches!(self, Self::Sponsored { .. } | Self::SponsoredPrivate { .. })
     }
 
-    /// Returns the gas token corresponding to the  [`FeeMode`]. In the case where the transaction is sponsored
-    /// the gas token is set as the STRK token
+    /// Returns the gas token corresponding to the [`FeeMode`].
+    /// For sponsored transactions the gas token is STRK.
+    /// For sponsored_private transactions the gas token is the user-chosen pool fee token.
     pub fn gas_token(&self) -> Felt {
         match self {
-            Self::Default { gas_token, tip: _ } => *gas_token,
-            Self::Sponsored { tip: _ } => Token::STRK_ADDRESS,
+            Self::Default { gas_token, .. } => *gas_token,
+            Self::Sponsored { .. } => Token::STRK_ADDRESS,
+            Self::SponsoredPrivate { pool_fee_token, .. } => *pool_fee_token,
         }
     }
 
     pub fn tip(&self) -> TipPriority {
         match self {
-            Self::Default { gas_token: _, tip } => *tip,
+            Self::Default { tip, .. } => *tip,
             Self::Sponsored { tip } => *tip,
+            Self::SponsoredPrivate { tip, .. } => *tip,
         }
+    }
+
+    pub fn is_sponsored_private(&self) -> bool {
+        matches!(self, Self::SponsoredPrivate { .. })
     }
 }

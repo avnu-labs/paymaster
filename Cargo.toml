@@ -33,12 +33,12 @@ jsonrpsee = "0.24.9"
 log = "0.4.27"
 moka = "0.12.10"
 rand = "0.9.1"
-reqwest = "0.12.20"
+reqwest = { version = "0.13.1", default-features = false, features = ["json", "query", "native-tls"] }
 serde = "1.0.219"
 serde_json = "1.0.139"
 serde_with = "3.14.0"
 simple_logger = "5.0.0"
-starknet = { git = "https://github.com/xJonathanLEI/starknet-rs", tag = "starknet/v0.17.0" }
+starknet = { package = "starknet-rust", git = "https://github.com/software-mansion/starknet-rust" }
 testcontainers = "0.23.3"
 thiserror = "2.0.11"
 tokio = "1.43.0"

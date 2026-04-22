@@ -1,4 +1,5 @@
 use starknet::ContractAddress;
+use starknet::account::Call;
 
 #[starknet::interface]
 pub trait IForwarder<TContractState> {
@@ -19,6 +20,19 @@ pub trait IForwarder<TContractState> {
         calldata: Array<felt252>,
         sponsor_metadata: Array<felt252>,
     ) -> bool;
+    fn execute_private(
+        ref self: TContractState,
+        calls: Array<Call>,
+        gas_token_address: ContractAddress,
+        gas_amount: u256,
+    ) -> bool;
+    fn execute_private_sponsored(
+        ref self: TContractState,
+        calls: Array<Call>,
+        gas_token_address: ContractAddress,
+        gas_amount: u256,
+        sponsor_metadata: Array<felt252>,
+    ) -> bool;
 }
 
 #[starknet::contract]
@@ -30,6 +44,7 @@ pub mod Forwarder {
     use avnu_lib::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starknet::syscalls::call_contract_syscall;
+    use starknet::account::Call;
     use starknet::{ContractAddress, SyscallResultTrait, get_caller_address, get_contract_address};
     use super::IForwarder;
 
@@ -135,6 +150,78 @@ pub mod Forwarder {
 
             // Emit event
             self.emit(SponsoredTransaction { user_address: account_address, sponsor_metadata });
+            true
+        }
+
+        fn execute_private(
+            ref self: ContractState,
+            calls: Array<Call>,
+            gas_token_address: ContractAddress,
+            gas_amount: u256,
+        ) -> bool {
+            // Check if caller is whitelisted
+            let caller = get_caller_address();
+            assert(self.whitelist.is_whitelisted(caller), 'Caller is not whitelisted');
+
+            let contract_address = get_contract_address();
+            let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
+            let balance_before = gas_token.balanceOf(contract_address);
+
+            // Execute each call
+            for call in calls {
+                call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
+            };
+
+            // Verify the forwarder received the expected gas funds
+            let balance_after = gas_token.balanceOf(contract_address);
+            let received = balance_after - balance_before;
+            assert(received >= gas_amount, 'Insufficient gas payment');
+
+            // Transfer all received funds to recipient (not just gas_amount)
+            let gas_fees_recipient = self.get_gas_fees_recipient();
+            gas_token.transfer(gas_fees_recipient, received);
+
+            true
+        }
+
+        fn execute_private_sponsored(
+            ref self: ContractState,
+            calls: Array<Call>,
+            gas_token_address: ContractAddress,
+            gas_amount: u256,
+            sponsor_metadata: Array<felt252>,
+        ) -> bool {
+            // Check if caller is whitelisted
+            let caller = get_caller_address();
+            assert(self.whitelist.is_whitelisted(caller), 'Caller is not whitelisted');
+
+            let contract_address = get_contract_address();
+
+            // Snapshot balance before execution so we can verify the pool fee was actually paid
+            let balance_before = if gas_amount > 0 {
+                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
+                gas_token.balanceOf(contract_address)
+            } else {
+                0_u256
+            };
+
+            // Execute each call
+            for call in calls {
+                call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
+            };
+
+            // Collect pool fee if any
+            if gas_amount > 0 {
+                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
+                let balance_after = gas_token.balanceOf(contract_address);
+                let received = balance_after - balance_before;
+                assert(received >= gas_amount, 'Insufficient pool fee payment');
+                let gas_fees_recipient = self.get_gas_fees_recipient();
+                gas_token.transfer(gas_fees_recipient, received);
+            }
+
+            // Emit event
+            self.emit(SponsoredTransaction { user_address: caller, sponsor_metadata });
             true
         }
     }

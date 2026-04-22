@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use std::sync::Arc;
 use std::time::Instant;
 

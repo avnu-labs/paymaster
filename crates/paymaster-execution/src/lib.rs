@@ -1,6 +1,7 @@
+extern crate starknet as starknet_rust;
+
 mod execution;
 
-use std::cmp::max;
 use std::collections::HashSet;
 
 use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
@@ -20,7 +21,7 @@ pub use error::Error;
 use paymaster_common::{measure_duration, metric};
 use paymaster_prices::{Client as PriceClient, PriceConfiguration};
 use paymaster_relayer::{LockedRelayer, RelayerManager, RelayerManagerConfiguration, RelayersConfiguration};
-use paymaster_starknet::transaction::{Calls, EstimatedCalls};
+use paymaster_starknet::transaction::{Calls, EstimatedCalls, PrivateProofData};
 use paymaster_starknet::{Configuration as StarknetConfiguration, ContractAddress, StarknetAccount, StarknetAccountConfiguration};
 use thiserror::Error;
 mod filter;
@@ -161,10 +162,18 @@ impl Client {
         Ok(result)
     }
 
+    /// Estimate gas for privacy transactions using real fee estimation with proof data.
+    pub async fn estimate_for_private(&self, calls: &Calls, tip: TipPriority, proof_data: &PrivateProofData) -> Result<EstimatedCalls, Error> {
+        let tip = self.get_tip(tip).await?;
+        let result = calls.estimate_with_proof(&self.estimate_account, Some(tip), proof_data).await?;
+
+        Ok(result)
+    }
+
     /// Get the tip value given a priority
     pub async fn get_tip(&self, tip: TipPriority) -> Result<u64, Error> {
         let tip: u64 = match tip {
-            TipPriority::Slow => max(self.starknet.fetch_median_tip().await? - 5, 0),
+            TipPriority::Slow => self.starknet.fetch_median_tip().await?.saturating_sub(5),
             TipPriority::Normal => self.starknet.fetch_median_tip().await?,
             TipPriority::Fast => self.starknet.fetch_median_tip().await? + 5,
             TipPriority::Custom(tip) => tip,

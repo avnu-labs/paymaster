@@ -8,12 +8,19 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::core::types::Felt;
 
+/// Default L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.).
+pub const DEFAULT_PRIVACY_GAS_OVERHEAD: u64 = 80_000_000;
+
 #[derive(Clone, Debug)]
 pub struct Configuration {
     pub rpc: RPCConfiguration,
 
     pub forwarder: Felt,
     pub supported_tokens: HashSet<Felt>,
+
+    pub privacy_pool: Felt,
+    pub privacy_pool_fee_amount: u128,
+    pub privacy_gas_overhead: u64,
 
     pub max_fee_multiplier: f32,
     pub provider_fee_overhead: f32,

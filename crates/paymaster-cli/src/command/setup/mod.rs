@@ -23,7 +23,9 @@ use paymaster_relayer::swap::client::SwapClientConfiguration;
 use paymaster_relayer::swap::{SwapClientConfigurator, SwapConfiguration};
 use paymaster_relayer::{Context as RelayerContext, RelayerManagerConfiguration, RelayerRebalancingService, RelayersConfiguration};
 use paymaster_rpc::RPCConfiguration;
-use paymaster_service::core::context::configuration::{Configuration as ServiceConfiguration, PriceConfiguration, PriceOracleConfiguration, VerbosityConfiguration};
+use paymaster_service::core::context::configuration::{
+    Configuration as ServiceConfiguration, PriceConfiguration, PriceOracleConfiguration, PrivacyConfiguration, VerbosityConfiguration,
+};
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::math::{denormalize_felt, normalize_felt};
 use paymaster_starknet::transaction::{Calls, TimeBounds};
@@ -241,6 +243,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         provider_fee_overhead: params.fee_overhead,
         supported_tokens,
         forwarder: forwarder_deployment.address,
+        privacy: PrivacyConfiguration::default(),
         estimate_account: StarknetAccountConfiguration {
             address: estimate_account_address,
             private_key: estimate_account_pk,

@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use starknet::accounts::Account;
 use starknet::core::serde::unsigned_field_element::UfeHex;
-use starknet::core::types::{BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, ResourceBounds, ResourceBoundsMapping};
+use starknet::core::types::{
+    BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, ResourceBounds, ResourceBoundsMapping,
+};
 use starknet::macros::selector;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -42,31 +44,35 @@ impl DeploymentParameters {
         let estimate_account_nonce = client.starknet.fetch_nonce(estimate_account).await?;
         let tip = client.get_tip(tip).await?;
 
-        Ok(BroadcastedTransaction::Invoke(BroadcastedInvokeTransactionV3 {
-            sender_address: estimate_account,
-            calldata: CalldataBuilder::new().encode(&vec![self.as_call()]).build(),
-            signature: vec![],
-            nonce: estimate_account_nonce,
-            resource_bounds: ResourceBoundsMapping {
-                l1_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
+        Ok(BroadcastedTransaction::Invoke(BroadcastedInvokeTransaction {
+            broadcasted_invoke_txn_v3: BroadcastedInvokeTransactionV3 {
+                sender_address: estimate_account,
+                calldata: CalldataBuilder::new().encode(&vec![self.as_call()]).build(),
+                signature: vec![],
+                nonce: estimate_account_nonce,
+                resource_bounds: ResourceBoundsMapping {
+                    l1_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l1_data_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
+                    l2_gas: ResourceBounds {
+                        max_amount: 0,
+                        max_price_per_unit: 0,
+                    },
                 },
-                l1_data_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
-                l2_gas: ResourceBounds {
-                    max_amount: 0,
-                    max_price_per_unit: 0,
-                },
+                tip,
+                paymaster_data: vec![],
+                account_deployment_data: vec![],
+                nonce_data_availability_mode: DataAvailabilityMode::L1,
+                fee_data_availability_mode: DataAvailabilityMode::L1,
+                proof_facts: None,
+                is_query: true,
             },
-            tip,
-            paymaster_data: vec![],
-            account_deployment_data: vec![],
-            nonce_data_availability_mode: DataAvailabilityMode::L1,
-            fee_data_availability_mode: DataAvailabilityMode::L1,
-            is_query: true,
+            proof: None,
         }))
     }
 

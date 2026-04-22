@@ -81,6 +81,9 @@ impl TestEnvironment {
 
             supported_tokens: HashSet::from([Token::ETH_ADDRESS, Token::usdc(starknet.chain_id()).address]),
             forwarder: StarknetTestEnvironment::FORWARDER,
+            privacy_pool: Felt::ZERO,
+            privacy_pool_fee_amount: 0,
+            privacy_gas_overhead: crate::DEFAULT_PRIVACY_GAS_OVERHEAD,
             gas_tank: StarknetAccountConfiguration {
                 address: StarknetTestEnvironment::FORWARDER,
                 private_key: felt!("0x0"),

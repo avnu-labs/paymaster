@@ -58,7 +58,6 @@ impl SwapClientConfiguration {
             chain_id: ChainID::Sepolia,
         }
     }
-
     /// Validate configuration
     pub fn validate(&self) -> Result<(), ServiceError> {
         // Validate endpoint

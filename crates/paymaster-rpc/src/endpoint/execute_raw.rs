@@ -68,6 +68,8 @@ pub async fn execute_direct_endpoint(ctx: &RequestContext<'_>, request: ExecuteD
         gas_tank_address,
         parameters: request.parameters.into(),
         transaction: request.transaction.into(),
+        privacy_pool: Felt::ZERO,
+        privacy_pool_fee_amount: 0,
     };
 
     let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {

@@ -23,6 +23,12 @@ pub use version::{PaymasterVersion, SupportedVersion};
 use crate::{ChainID, Error, Signature};
 
 #[derive(Debug, Clone, Hash)]
+pub struct PrivateProofData {
+    pub proof: String,
+    pub proof_facts: Vec<Felt>,
+}
+
+#[derive(Debug, Clone, Hash)]
 pub struct ExecuteFromOutsideParameters {
     pub chain_id: ChainID,
     pub caller: Felt,

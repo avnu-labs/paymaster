@@ -9,6 +9,7 @@ async-trait = { workspace = true }
 envy = { workspace = true }
 log = { workspace = true }
 lazy_static = { workspace = true }
+paymaster-execution = { path = "../paymaster-execution" }
 paymaster-rpc = { path = "../paymaster-rpc" }
 paymaster-sponsoring = { path = "../paymaster-sponsoring" }
 paymaster-common = { path = "../paymaster-common" }

@@ -1,3 +1,5 @@
+extern crate starknet as starknet_rust;
+
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 
