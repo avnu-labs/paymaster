@@ -7,6 +7,7 @@ use starknet::syscalls::deploy_syscall;
 use starknet::testing::pop_log_raw;
 use super::mocks::account_mock::{IAccountDispatcher, MockAccount};
 use super::mocks::erc20_mock::ERC20Mock;
+use super::mocks::privacy_pool_mock::{IMockPrivacyPoolDispatcher, MockPrivacyPool};
 
 pub fn deploy_mock_token(recipient: ContractAddress, balance: felt252) -> IERC20Dispatcher {
     let mut constructor_args: Array<felt252> = ArrayTrait::new();
@@ -23,6 +24,18 @@ pub fn deploy_mock_account() -> IAccountDispatcher {
     let (token_address, _) = deploy_syscall(MockAccount::TEST_CLASS_HASH.try_into().unwrap(), 0, constructor_args.span(), false)
         .expect('account deploy failed');
     return IAccountDispatcher { contract_address: token_address };
+}
+
+pub fn deploy_mock_pool(
+    fee_amount: u128, fee_collector: ContractAddress, strk_token: ContractAddress,
+) -> IMockPrivacyPoolDispatcher {
+    let mut constructor_args: Array<felt252> = ArrayTrait::new();
+    constructor_args.append(fee_amount.into());
+    constructor_args.append(fee_collector.into());
+    constructor_args.append(strk_token.into());
+    let (pool_address, _) = deploy_syscall(MockPrivacyPool::TEST_CLASS_HASH.try_into().unwrap(), 0, constructor_args.span(), false)
+        .expect('pool deploy failed');
+    return IMockPrivacyPoolDispatcher { contract_address: pool_address };
 }
 
 pub fn deploy_forwarder() -> (IForwarderDispatcher, IOwnableDispatcher, IWhitelistDispatcher) {

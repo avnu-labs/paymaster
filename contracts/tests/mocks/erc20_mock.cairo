@@ -6,6 +6,7 @@ pub trait IERC20<TStorage> {
     fn transfer(ref self: TStorage, to: ContractAddress, amount: u256);
     fn transferFrom(ref self: TStorage, from: ContractAddress, to: ContractAddress, amount: u256);
     fn balanceOf(self: @TStorage, account: ContractAddress) -> u256;
+    fn allowance(self: @TStorage, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn mint(ref self: TStorage, account: ContractAddress, amount: u256);
     fn burn(ref self: TStorage, account: ContractAddress, amount: u256);
 }
@@ -63,6 +64,10 @@ pub mod ERC20Mock {
         fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) {
             let caller = get_caller_address();
             self._approve(caller, spender, amount);
+        }
+
+        fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
+            self.ERC20_allowances.read((owner, spender))
         }
 
         fn mint(ref self: ContractState, account: ContractAddress, amount: u256) {
