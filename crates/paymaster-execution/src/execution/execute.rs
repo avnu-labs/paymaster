@@ -1,4 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
+use paymaster_starknet::constants::Token;
 use paymaster_starknet::transaction::{
     parse_server_actions, CalldataBuilder, Calls, EstimatedCalls, ExecuteFromOutsideMessage, PrivateProofData, SequentialCalldataDecoder, ServerAction, TokenTransfer,
 };
@@ -397,6 +398,17 @@ impl ExecutableTransaction {
         Calls::new(calls)
     }
 
+    /// The privacy pool collects its fee in STRK via `transferFrom(forwarder, ...)`. The forwarder is
+    /// never paid in STRK — the user may be paying in a different gas token (USDC, etc.) — so the
+    /// relayer seeds the forwarder's STRK balance before the forwarder call. The relayer is later
+    /// reimbursed through the standard gas-tank → relayers STRK rebalancing cycle.
+    fn build_pool_fee_pretransfer_call(&self) -> Option<Call> {
+        if self.privacy_pool_fee_amount == 0 {
+            return None;
+        }
+        Some(TokenTransfer::new(Token::STRK_ADDRESS, self.forwarder, Felt::from(self.privacy_pool_fee_amount)).to_call())
+    }
+
     /// Validate and build the inner calls for a private transaction (optional execute_from_outside + apply_actions)
     fn build_private_inner_calls(&self, invoke: Option<&ExecutableInvokeParameters>, apply_action: &ExecutableApplyActionParameters) -> Result<Vec<Call>, Error> {
         let apply_call = &apply_action.apply_actions_call;
@@ -445,7 +457,12 @@ impl ExecutableTransaction {
                 .build(),
         };
 
-        Ok(Calls::new(vec![forwarder_call]))
+        let mut calls = Vec::with_capacity(2);
+        if let Some(pretransfer) = self.build_pool_fee_pretransfer_call() {
+            calls.push(pretransfer);
+        }
+        calls.push(forwarder_call);
+        Ok(Calls::new(calls))
     }
 
     /// Build calls for a gasless private transaction using `execute_private`
@@ -468,7 +485,12 @@ impl ExecutableTransaction {
                 .build(),
         };
 
-        Ok(Calls::new(vec![forwarder_call]))
+        let mut calls = Vec::with_capacity(2);
+        if let Some(pretransfer) = self.build_pool_fee_pretransfer_call() {
+            calls.push(pretransfer);
+        }
+        calls.push(forwarder_call);
+        Ok(Calls::new(calls))
     }
 
     fn build_deploy_call(&self) -> Option<Call> {
