@@ -368,10 +368,9 @@ impl PrivateTransaction {
         let estimated_fee_in_strk = Felt::from(user_calls_fee + privacy_overhead);
         let estimated_fee_in_gas_token = convert_strk_to_token(&token, estimated_fee_in_strk, true)?;
 
-        // Add pool fee (not multiplied — it's a fixed known cost)
         let total_fee_in_strk = estimated_fee_in_strk + Felt::from(self.pool_fee_amount);
 
-        let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(estimated_fee_in_strk) + Felt::from(self.pool_fee_amount);
+        let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(total_fee_in_strk);
         let suggested_max_fee_in_gas_token = convert_strk_to_token(&token, suggested_max_fee_in_strk, true)?;
 
         let typed_data = if let Some(user_calls) = self.user_calls {
@@ -397,7 +396,8 @@ impl PrivateTransaction {
         // In sponsored mode the relayer covers gas but the user still pays the pool fee
         let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
             if self.pool_fee_amount > 0 {
-                convert_strk_to_token(&token, Felt::from(self.pool_fee_amount), true)?
+                let pool_fee_with_overhead = client.compute_max_fee_in_strk(Felt::from(self.pool_fee_amount));
+                convert_strk_to_token(&token, pool_fee_with_overhead, true)?
             } else {
                 Felt::ZERO
             }
