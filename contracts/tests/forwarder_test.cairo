@@ -3,7 +3,7 @@ use avnu_lib::components::ownable::IOwnableDispatcherTrait;
 use avnu_lib::components::whitelist::IWhitelistDispatcherTrait;
 use starknet::contract_address_const;
 use starknet::testing::set_contract_address;
-use super::helper::{deploy_forwarder, deploy_mock_account, deploy_mock_token};
+use super::helper::{deploy_forwarder, deploy_mock_account, deploy_mock_pool, deploy_mock_token};
 
 mod GetGasFessRecipient {
     use super::{IForwarderDispatcherTrait, contract_address_const, deploy_forwarder};
@@ -158,11 +158,12 @@ mod ExecutePrivate {
     use starknet::account::Call;
     use super::{
         IForwarderDispatcherTrait, IOwnableDispatcherTrait, IWhitelistDispatcherTrait, contract_address_const, deploy_forwarder,
-        deploy_mock_token, set_contract_address,
+        deploy_mock_pool, deploy_mock_token, set_contract_address,
     };
 
     // selector!("mint")
     const MINT_SELECTOR: felt252 = 0x02f0b3c5710379609eb5495f1ecd348cb28167711b73609fe565a72734550354;
+    const APPLY_ACTIONS_SELECTOR: felt252 = selector!("apply_actions");
 
     #[test]
     #[available_gas(2000000000)]
@@ -178,13 +179,17 @@ mod ExecutePrivate {
         let gas_token_address = gas_token.contract_address;
         let gas_amount: u256 = 5_u256;
 
-        // Calls: mint gas_amount tokens to the forwarder during execution
+        // The last call of a private batch is always the pool call; use a fee=0 mock here
+        // so the approve path short-circuits without touching STRK.
+        let pool = deploy_mock_pool(0_u128);
+        // Calls: mint gas_amount tokens to the forwarder, then invoke the pool.
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,
                 selector: MINT_SELECTOR,
                 calldata: array![forwarder.contract_address.into(), 5, 0].span(),
             },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         set_contract_address(caller);
 
@@ -212,7 +217,8 @@ mod ExecutePrivate {
         let gas_token_address = gas_token.contract_address;
         let gas_amount: u256 = 3_u256;
 
-        // Calls: two mints, total 5 tokens but only 3 required as gas
+        let pool = deploy_mock_pool(0_u128);
+        // Calls: two mints (total 5 tokens, only 3 required as gas), followed by the pool call.
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,
@@ -224,6 +230,7 @@ mod ExecutePrivate {
                 selector: MINT_SELECTOR,
                 calldata: array![forwarder.contract_address.into(), 3, 0].span(),
             },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         set_contract_address(caller);
 
@@ -266,13 +273,15 @@ mod ExecutePrivate {
         let gas_token = deploy_mock_token(contract_address_const::<0x0>(), 0);
         let gas_token_address = gas_token.contract_address;
 
-        // Mint only 2 tokens but require 5
+        let pool = deploy_mock_pool(0_u128);
+        // Mint only 2 tokens but require 5; pool call appended.
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,
                 selector: MINT_SELECTOR,
                 calldata: array![forwarder.contract_address.into(), 2, 0].span(),
             },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         set_contract_address(caller);
 
@@ -286,11 +295,12 @@ mod ExecutePrivateSponsored {
     use starknet::account::Call;
     use super::{
         IForwarderDispatcherTrait, IOwnableDispatcherTrait, IWhitelistDispatcherTrait, contract_address_const, deploy_forwarder,
-        deploy_mock_account, deploy_mock_token, set_contract_address,
+        deploy_mock_account, deploy_mock_pool, deploy_mock_token, set_contract_address,
     };
 
     // selector!("mint")
     const MINT_SELECTOR: felt252 = 0x02f0b3c5710379609eb5495f1ecd348cb28167711b73609fe565a72734550354;
+    const APPLY_ACTIONS_SELECTOR: felt252 = selector!("apply_actions");
 
     #[test]
     #[available_gas(2000000000)]
@@ -303,8 +313,10 @@ mod ExecutePrivateSponsored {
         whitelist.set_whitelisted_address(caller, true);
         let account = deploy_mock_account();
         let entrypoint: felt252 = 0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60;
+        let pool = deploy_mock_pool(0_u128);
         let calls: Array<Call> = array![
             Call { to: account.contract_address, selector: entrypoint, calldata: array![].span() },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         let gas_token_address = contract_address_const::<0x0>();
         set_contract_address(caller);
@@ -331,13 +343,15 @@ mod ExecutePrivateSponsored {
         let gas_token_address = gas_token.contract_address;
         let pool_fee: u256 = 3_u256;
 
-        // Calls: mint pool_fee tokens to the forwarder (simulates TransferTo from apply_actions)
+        let pool = deploy_mock_pool(0_u128);
+        // Calls: mint pool_fee tokens to the forwarder (simulates TransferTo from apply_actions), then pool call.
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,
                 selector: MINT_SELECTOR,
                 calldata: array![forwarder.contract_address.into(), 3, 0].span(),
             },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         set_contract_address(caller);
 
@@ -367,18 +381,43 @@ mod ExecutePrivateSponsored {
         let gas_token = deploy_mock_token(forwarder.contract_address, 10);
         let gas_token_address = gas_token.contract_address;
 
-        // Mint only 2 tokens but require 5 — pre-existing balance must not help
+        let pool = deploy_mock_pool(0_u128);
+        // Mint only 2 tokens but require 5 — pre-existing balance must not help; pool call appended.
         let calls: Array<Call> = array![
             Call {
                 to: gas_token_address,
                 selector: MINT_SELECTOR,
                 calldata: array![forwarder.contract_address.into(), 2, 0].span(),
             },
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
         ];
         set_contract_address(caller);
 
         // When & Then
         forwarder.execute_private_sponsored(calls, gas_token_address, 5_u256, sponsor_metadata);
+    }
+
+    #[test]
+    #[available_gas(2000000000)]
+    #[should_panic(expected: ('Pool fee exceeds limit', 'ENTRYPOINT_FAILED'))]
+    fn should_fail_when_pool_fee_exceeds_limit() {
+        // Given — pool with a fee just over MAX_POOL_FEE (10_000 STRK in FRI)
+        let (forwarder, ownable, whitelist) = deploy_forwarder();
+        let caller = contract_address_const::<0x999>();
+        let sponsor_metadata: Array<felt252> = array!['SPONSOR_ID'];
+        set_contract_address(ownable.get_owner());
+        whitelist.set_whitelisted_address(caller, true);
+        // 10_000 STRK + 1 FRI
+        let pool_fee: u128 = 10_000_000_000_000_000_000_001_u128;
+        let pool = deploy_mock_pool(pool_fee);
+        let gas_token_address = contract_address_const::<0x0>();
+        let calls: Array<Call> = array![
+            Call { to: pool.contract_address, selector: APPLY_ACTIONS_SELECTOR, calldata: array![].span() },
+        ];
+        set_contract_address(caller);
+
+        // When & Then
+        forwarder.execute_private_sponsored(calls, gas_token_address, 0_u256, sponsor_metadata);
     }
 
     #[test]
