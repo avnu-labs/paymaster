@@ -2,6 +2,11 @@ use starknet::ContractAddress;
 use starknet::account::Call;
 
 #[starknet::interface]
+pub trait IPrivacyPool<TContractState> {
+    fn get_fee_amount(self: @TContractState) -> u128;
+}
+
+#[starknet::interface]
 pub trait IForwarder<TContractState> {
     fn get_gas_fees_recipient(self: @TContractState) -> ContractAddress;
     fn set_gas_fees_recipient(ref self: TContractState, gas_fees_recipient: ContractAddress) -> bool;
@@ -46,7 +51,12 @@ pub mod Forwarder {
     use starknet::syscalls::call_contract_syscall;
     use starknet::account::Call;
     use starknet::{ContractAddress, SyscallResultTrait, get_caller_address, get_contract_address};
-    use super::IForwarder;
+    use super::{IForwarder, IPrivacyPoolDispatcher, IPrivacyPoolDispatcherTrait};
+
+    const STRK_TOKEN_ADDRESS: felt252 = 0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d;
+
+    // 10_000 STRK in FRI (18 decimals). Safety cap against a misconfigured or malicious pool.
+    const MAX_POOL_FEE: u256 = 10_000_000_000_000_000_000_000_u256;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradableComponent, storage: upgradable, event: UpgradableEvent);
@@ -94,6 +104,22 @@ pub mod Forwarder {
     fn constructor(ref self: ContractState, owner: ContractAddress, gas_fees_recipient: ContractAddress) {
         self.ownable.initialize(owner);
         self.gas_fees_recipient.write(gas_fees_recipient);
+    }
+
+    // The last call of every private batch targets the privacy pool; approve the pool to pull
+    // its STRK fee during `apply_actions`. The pool always collects fees in STRK, independent
+    // of the gas token the user is paying in.
+    fn approve_pool_fee(calls: @Array<Call>) {
+        assert(calls.len() > 0, 'Empty calls');
+        let last_call = calls.at(calls.len() - 1);
+        let pool_address = *last_call.to;
+        let pool = IPrivacyPoolDispatcher { contract_address: pool_address };
+        let fee_amount: u256 = pool.get_fee_amount().into();
+        assert(fee_amount <= MAX_POOL_FEE, 'Pool fee exceeds limit');
+        if fee_amount > 0 {
+            let strk = IERC20Dispatcher { contract_address: STRK_TOKEN_ADDRESS.try_into().unwrap() };
+            strk.approve(pool_address, fee_amount);
+        }
     }
 
     #[abi(embed_v0)]
@@ -167,6 +193,8 @@ pub mod Forwarder {
             let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
             let balance_before = gas_token.balanceOf(contract_address);
 
+            approve_pool_fee(@calls);
+
             // Execute each call
             for call in calls {
                 call_contract_syscall(call.to, call.selector, call.calldata).unwrap_syscall();
@@ -198,12 +226,14 @@ pub mod Forwarder {
             let contract_address = get_contract_address();
 
             // Snapshot balance before execution so we can verify the pool fee was actually paid
+            let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
             let balance_before = if gas_amount > 0 {
-                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
                 gas_token.balanceOf(contract_address)
             } else {
                 0_u256
             };
+
+            approve_pool_fee(@calls);
 
             // Execute each call
             for call in calls {
@@ -212,7 +242,6 @@ pub mod Forwarder {
 
             // Collect pool fee if any
             if gas_amount > 0 {
-                let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
                 let balance_after = gas_token.balanceOf(contract_address);
                 let received = balance_after - balance_before;
                 assert(received >= gas_amount, 'Insufficient pool fee payment');
