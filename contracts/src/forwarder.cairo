@@ -108,8 +108,9 @@ pub mod Forwarder {
 
     // The last call of every private batch targets the privacy pool; approve the pool to pull
     // its STRK fee during `apply_actions`. The pool always collects fees in STRK, independent
-    // of the gas token the user is paying in.
-    fn approve_pool_fee(calls: @Array<Call>) {
+    // of the gas token the user is paying in. Returns the fee amount so callers can adjust the
+    // gas-token balance snapshot when gas_token == STRK (see execute_private*).
+    fn approve_pool_fee(calls: @Array<Call>) -> u256 {
         assert(calls.len() > 0, 'Empty calls');
         let last_call = calls.at(calls.len() - 1);
         let pool_address = *last_call.to;
@@ -120,6 +121,7 @@ pub mod Forwarder {
             let strk = IERC20Dispatcher { contract_address: STRK_TOKEN_ADDRESS.try_into().unwrap() };
             strk.approve(pool_address, fee_amount);
         }
+        fee_amount
     }
 
     #[abi(embed_v0)]
@@ -191,9 +193,20 @@ pub mod Forwarder {
 
             let contract_address = get_contract_address();
             let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
-            let balance_before = gas_token.balanceOf(contract_address);
 
-            approve_pool_fee(@calls);
+            // Approve the pool to pull its STRK fee, and grab that fee amount.
+            let pool_fee = approve_pool_fee(@calls);
+
+            // When gas_token == STRK, the relayer pre-transferred `pool_fee` STRK to this forwarder
+            // immediately before this call (see paymaster-execution::build_pool_fee_pretransfer_call).
+            // The pool will pull that exact amount back during apply_actions, so it must NOT count
+            // toward `received` — otherwise the assertion below underestimates what the user paid.
+            let pretransferred: u256 = if gas_token_address == STRK_TOKEN_ADDRESS.try_into().unwrap() {
+                pool_fee
+            } else {
+                0_u256
+            };
+            let balance_before = gas_token.balanceOf(contract_address) - pretransferred;
 
             // Execute each call
             for call in calls {
@@ -224,16 +237,23 @@ pub mod Forwarder {
             assert(self.whitelist.is_whitelisted(caller), 'Caller is not whitelisted');
 
             let contract_address = get_contract_address();
-
-            // Snapshot balance before execution so we can verify the pool fee was actually paid
             let gas_token = IERC20Dispatcher { contract_address: gas_token_address };
-            let balance_before = if gas_amount > 0 {
-                gas_token.balanceOf(contract_address)
+
+            // Approve the pool to pull its STRK fee, and grab that fee amount.
+            let pool_fee = approve_pool_fee(@calls);
+
+            // Same offset as in execute_private: when gas_token == STRK, exclude the relayer's
+            // pre-transferred STRK from the pool-fee-payment snapshot.
+            let pretransferred: u256 = if gas_amount > 0 && gas_token_address == STRK_TOKEN_ADDRESS.try_into().unwrap() {
+                pool_fee
             } else {
                 0_u256
             };
-
-            approve_pool_fee(@calls);
+            let balance_before = if gas_amount > 0 {
+                gas_token.balanceOf(contract_address) - pretransferred
+            } else {
+                0_u256
+            };
 
             // Execute each call
             for call in calls {
