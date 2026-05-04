@@ -1,4 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
+use paymaster_starknet::constants::Token;
 use paymaster_starknet::transaction::{Calls, ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TokenTransfer};
 use paymaster_starknet::{ChainID, ContractAddress};
 use starknet::core::types::{BroadcastedTransaction, Felt, TypedData};
@@ -370,10 +371,19 @@ impl PrivateTransaction {
 
         let total_fee_in_strk = estimated_fee_in_strk + Felt::from(self.pool_fee_amount);
 
+        // The provider overhead on the pool fee covers STRK/gas-token price drift between build
+        // and execute. When the user pays the pool fee in STRK, there is no drift to cover, so we
+        // pass the raw pool fee through.
+        let pool_fee_with_overhead = if gas_token == Token::STRK_ADDRESS {
+            Felt::from(self.pool_fee_amount)
+        } else {
+            client.compute_paid_fee_in_strk(Felt::from(self.pool_fee_amount))
+        };
+
         // Apply the max_fee multiplier only to the estimated gas fee (which can drift at execute time).
         // The pool fee is a fixed amount in STRK read from the pool, so we only add the smaller
-        // provider overhead to cover STRK / gas-token price drift between build and execute.
-        let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(estimated_fee_in_strk) + client.compute_paid_fee_in_strk(Felt::from(self.pool_fee_amount));
+        // provider overhead (or none, when gas_token == STRK) on top.
+        let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(estimated_fee_in_strk) + pool_fee_with_overhead;
         let suggested_max_fee_in_gas_token = convert_strk_to_token(&token, suggested_max_fee_in_strk, true)?;
 
         let typed_data = if let Some(user_calls) = self.user_calls {
@@ -396,10 +406,10 @@ impl PrivateTransaction {
             None
         };
 
-        // In sponsored mode the relayer covers gas but the user still pays the pool fee
+        // In sponsored mode the relayer covers gas but the user still pays the pool fee. Reuse the
+        // overhead-aware amount computed above (no overhead when gas_token == STRK).
         let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
             if self.pool_fee_amount > 0 {
-                let pool_fee_with_overhead = client.compute_paid_fee_in_strk(Felt::from(self.pool_fee_amount));
                 convert_strk_to_token(&token, pool_fee_with_overhead, true)?
             } else {
                 Felt::ZERO
