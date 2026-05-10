@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use crate::avnu::{AVNUPriceClientConfiguration, AVNUPriceOracle};
 use paymaster_common::concurrency::ConcurrentExecutor;
+use paymaster_starknet::constants::Token;
 use serde::{Deserialize, Serialize};
 use starknet::core::types::Felt;
 use thiserror::Error;
@@ -120,7 +121,11 @@ impl Client {
     }
 
     pub async fn fetch_tokens(&self, tokens: &HashSet<Felt>) -> Vec<Result<TokenPrice, Error>> {
-        let mut executor = ConcurrentExecutor::new(self.clone(), 8);
+        // Warm the STRK price cache once so concurrent workers below all hit the cache
+        // instead of each issuing their own STRK fetch.
+        let _ = self.fetch_token(Token::STRK_ADDRESS).await;
+
+        let mut executor = ConcurrentExecutor::new(self.clone(), 32);
         for token in tokens.iter().cloned() {
             executor.register(task!(|context| { context.fetch_token(token).await }));
         }
