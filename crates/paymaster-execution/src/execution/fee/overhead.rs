@@ -25,8 +25,8 @@ impl Mul<ValidationGasOverhead> for BlockGasPrice {
 }
 
 impl ValidationGasOverhead {
-    /// No additional gos
-    fn none() -> Self {
+    /// No additional gas
+    pub fn none() -> Self {
         Self::default()
     }
 
@@ -39,7 +39,17 @@ impl ValidationGasOverhead {
         }
     }
 
-    /// Returns the overhead approximation given the [`user`] address
+    fn from_get_signers_response(response: &[Felt]) -> Self {
+        if response.len() > 4 {
+            Self::braavos()
+        } else {
+            Self::none()
+        }
+    }
+
+    /// Returns the overhead approximation given the [`user`] address. An `Err` means the
+    /// detection is not authoritative (contract not deployed yet, transient RPC error)
+    /// and the caller should not cache the result.
     pub async fn fetch(client: &Client, user: ContractAddress) -> Result<Self, Error> {
         let call = FunctionCall {
             contract_address: user,
@@ -48,12 +58,45 @@ impl ValidationGasOverhead {
         };
 
         match client.call(&call).await {
-            Ok(response) if response.len() > 4 => Ok(Self::braavos()),
-            Ok(_) => Ok(Self::none()),
-            Err(e) => {
-                tracing::debug!(user = %user.to_fixed_hex_string(), error = %e, "get_signers failed (expected for non-Braavos)");
-                Ok(Self::none())
-            },
+            Ok(response) => Ok(Self::from_get_signers_response(&response)),
+            Err(paymaster_starknet::Error::Execution(_)) | Err(paymaster_starknet::Error::Contract(_)) => Ok(Self::none()),
+            Err(e) => Err(e.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_get_signers_response_classic_braavos_4_felts_returns_none() {
+        let response = vec![
+            felt!("0x1"),
+            felt!("0x14ffa4f8f8770236d284eee22b52120102e22af8c9ca1a045084be9b1e7d1b9"),
+            Felt::ZERO,
+            Felt::ZERO,
+        ];
+        let overhead = ValidationGasOverhead::from_get_signers_response(&response);
+        assert_eq!(overhead.l2_gas, Felt::ZERO);
+    }
+
+    #[test]
+    fn from_get_signers_response_braavos_passkey_5_felts_returns_braavos() {
+        let response = vec![
+            felt!("0x1"),
+            felt!("0x4221c76ba6e0e6b0c9b51bf74c9bd84ca40c33049443f7b3700c982f3348163"),
+            felt!("0x1"),
+            felt!("0x4939ff2d144c912b3bd7906928101c1a1c13a342911216dce9192d2114ae71"),
+            Felt::ZERO,
+        ];
+        let overhead = ValidationGasOverhead::from_get_signers_response(&response);
+        assert_eq!(overhead.l2_gas, felt!("0x02c7ab80"));
+    }
+
+    #[test]
+    fn from_get_signers_response_empty_returns_none() {
+        let overhead = ValidationGasOverhead::from_get_signers_response(&[]);
+        assert_eq!(overhead.l2_gas, Felt::ZERO);
     }
 }
