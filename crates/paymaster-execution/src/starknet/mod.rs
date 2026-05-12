@@ -104,10 +104,13 @@ impl Client {
             return Ok(value);
         }
 
-        let overhead = ValidationGasOverhead::fetch(self, user).await?;
-        self.cache_overhead.insert(user, overhead);
-
-        Ok(overhead)
+        match ValidationGasOverhead::fetch(self, user).await {
+            Ok(overhead) => {
+                self.cache_overhead.insert(user, overhead);
+                Ok(overhead)
+            },
+            Err(_) => Ok(ValidationGasOverhead::none()),
+        }
     }
 
     /// Fetch the current block gas price. This function relies on a cache that expires every 10s so
