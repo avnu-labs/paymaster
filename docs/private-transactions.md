@@ -343,7 +343,7 @@ await paymaster.executeTransaction({
 
 ### Sponsored Private Swap via avnu
 
-You can use `@avnu/avnu-sdk 4.1.0-next.2`.
+> **Note:** This flow requires `@avnu/avnu-sdk` ≥ `4.1.0-next.2`. As of June 2026 this version is not yet published to npm — published versions (up to `4.1.0-next.1`) do not expose the `private` option in `quoteToCalls`, the `executorAddress` return value, or `serializeCalls`.
 
 ```ts
 import { getQuotes, quoteToCalls } from "@avnu/avnu-sdk";
