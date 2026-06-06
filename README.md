@@ -24,6 +24,7 @@ SNIP-29 compliant Paymaster for Starknet.
 
 - **Gasless** - Let users pay gas in any ERC-20 (USDC, ETH, ...)
 - **Gasfree** - Sponsor user transactions with flexible logic (API key or webhook)
+- **Private transactions** - Privacy pool integration with sponsored, gasless, and sponsored-private fee modes ([docs](docs/private-transactions.md))
 - **Fast setup** - Deploy a full Paymaster in 2 minutes with the CLI
 - **Auto-rebalancing** - Swap supported tokens into STRK and refill relayers automatically
 - **Scales effortlessly** - Vertical (more relayers) or horizontal (multi-instance with Redis)
@@ -137,6 +138,7 @@ cargo run --release --bin paymaster-service --profile=path/to/my-profile.json
 | [docs.avnu.fi/docs/paymaster](https://docs.avnu.fi/docs/paymaster) | Using avnu's managed Paymaster |
 | [portal.avnu.fi](https://portal.avnu.fi) | API keys, gas credits, transaction monitoring |
 | [docs.out-of-gas.xyz](https://docs.out-of-gas.xyz) | Self-hosting your own instance |
+| [Private transactions](docs/private-transactions.md) | Privacy pool integration and wallet integration guide |
 | [Contracts](https://github.com/avnu-labs/paymaster/tree/main/contracts) | Forwarder contracts (audited by Nethermind) |
 
 ## Contributing
