@@ -81,6 +81,7 @@ pub struct Client {
 
     max_fee_multiplier: f32,
     provider_fee_multiplier: f32,
+    max_l2_gas_amount: u64,
 
     estimate_account: StarknetAccount,
     relayers: RelayerManager,
@@ -97,6 +98,7 @@ impl Client {
 
             max_fee_multiplier: configuration.max_fee_multiplier,
             provider_fee_multiplier: 1.0 + configuration.provider_fee_overhead,
+            max_l2_gas_amount: configuration.starknet.max_l2_gas_amount,
 
             estimate_account: Starknet::new(&configuration.starknet).initialize_account(&configuration.estimate_account),
             relayers: RelayerManager::new(&configuration.clone().into()),
@@ -159,7 +161,7 @@ impl Client {
         let tip = self.get_tip(tip).await?;
         let result = calls.estimate(&self.estimate_account, Some(tip)).await?;
 
-        Ok(result)
+        Ok(result.with_max_l2_gas_amount(self.max_l2_gas_amount))
     }
 
     /// Estimate gas for privacy transactions using real fee estimation with proof data.
@@ -167,7 +169,7 @@ impl Client {
         let tip = self.get_tip(tip).await?;
         let result = calls.estimate_with_proof(&self.estimate_account, Some(tip), proof_data).await?;
 
-        Ok(result)
+        Ok(result.with_max_l2_gas_amount(self.max_l2_gas_amount))
     }
 
     /// Get the tip value given a priority

@@ -261,6 +261,10 @@ impl ExecutableTransaction {
             })?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
+        // Reject here (before locking a relayer and broadcasting) when the L2 gas bound cannot fit
+        // under the sequencer cap, so the typed MaxL2GasAmountExceeded error reaches the client.
+        final_fee_estimate.check_l2_gas_within_cap()?;
+
         // Validate pool fee transfer for private sponsored transactions
         if self.privacy_pool_fee_amount > 0 {
             if let Some(apply_action) = match &self.transaction {
@@ -318,6 +322,10 @@ impl ExecutableTransaction {
             })?;
         let final_fee_estimate = fee_estimate.update_overall_fee(paid_fee_in_strk);
 
+        // Reject here (before locking a relayer and broadcasting) when the L2 gas bound cannot fit
+        // under the sequencer cap, so the typed MaxL2GasAmountExceeded error reaches the client.
+        final_fee_estimate.check_l2_gas_within_cap()?;
+
         let token_price = client.price.fetch_token(transfer.token()).await?;
         let paid_fee_in_token = convert_strk_to_token(&token_price, paid_fee_in_strk, true)?;
 
@@ -349,6 +357,11 @@ impl ExecutableTransaction {
 
         let gas_fee_in_strk = self.compute_paid_fee(client, Felt::from(fee_estimate.overall_fee)).await?;
         let gas_estimate = fee_estimate.update_overall_fee(gas_fee_in_strk);
+
+        // Reject here (before locking a relayer and broadcasting) when the L2 gas bound cannot fit
+        // under the sequencer cap, so the typed MaxL2GasAmountExceeded error reaches the client.
+        gas_estimate.check_l2_gas_within_cap()?;
+
         let required_fee_in_strk = gas_fee_in_strk + Felt::from(self.privacy_pool_fee_amount);
 
         let token_price = client.price.fetch_token(transfer.token()).await?;

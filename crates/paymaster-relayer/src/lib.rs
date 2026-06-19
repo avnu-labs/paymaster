@@ -211,6 +211,7 @@ mod tests {
                     chain_id: ChainID::Sepolia,
                     timeout: 10,
                     fallbacks: vec![],
+                    max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
                 },
                 supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
                 gas_tank: StarknetAccountConfiguration {

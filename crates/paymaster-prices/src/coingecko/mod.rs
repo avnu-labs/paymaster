@@ -189,6 +189,7 @@ mod tests {
                 chain_id: ChainID::Mainnet,
                 timeout: 10,
                 fallbacks: vec![],
+                max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
             },
         });
 

@@ -65,6 +65,7 @@ pub async fn command_balances(params: BalancesCommandParameters) -> Result<(), E
         chain_id,
         fallbacks: vec![],
         timeout: 10,
+        max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
     });
 
     // Display relayers balances
