@@ -585,6 +585,7 @@ mod rebalancing_tests {
                 endpoint: "http://localhost:5050".to_string(),
                 fallbacks: vec![],
                 timeout: 10,
+                max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
             },
             supported_tokens: HashSet::from([Token::usdc(&ChainID::Sepolia).address]),
             relayers: RelayersConfiguration {

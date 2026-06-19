@@ -162,6 +162,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
         chain_id,
         fallbacks: vec![],
         timeout: 10,
+        max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
     });
 
     // Check that the initial funding is enough for rebalancing to work properly
@@ -236,6 +237,7 @@ pub async fn deploy_paymaster_core(params: SetupParameters, skip_user_confirmati
             chain_id,
             fallbacks: vec![],
             timeout: params.rpc_timeout,
+            max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
         },
         rpc: RPCConfiguration { port: params.rpc_port },
         prometheus: None,

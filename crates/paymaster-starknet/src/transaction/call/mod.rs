@@ -196,7 +196,18 @@ impl EstimatedCalls {
         self.estimate.clone()
     }
 
+    /// Override the maximum L2 gas amount the declared gas bound will be capped to. See
+    /// [`TransactionGasEstimate::with_max_l2_gas_amount`].
+    pub fn with_max_l2_gas_amount(mut self, max_l2_gas_amount: u64) -> Self {
+        self.estimate = self.estimate.with_max_l2_gas_amount(max_l2_gas_amount);
+        self
+    }
+
     pub async fn execute(&self, account: &StarknetAccount, nonce: Felt) -> Result<InvokeTransactionResult, Error> {
+        // Reject before broadcast when the transaction cannot fit under the sequencer L2 gas cap, so we
+        // surface a clear error instead of a paid out-of-gas revert.
+        self.estimate.check_l2_gas_within_cap()?;
+
         let mut execution = account
             .execute_v3(self.calls.to_vec())
             .nonce(nonce)

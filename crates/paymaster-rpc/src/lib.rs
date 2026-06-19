@@ -105,6 +105,9 @@ pub enum Error {
     #[error("sponsored_private mode requires a private transaction")]
     SponsoredPrivateRequiresPrivacy,
 
+    #[error("max L2 gas amount exceeded: {0}")]
+    MaxL2GasAmountExceeded(String),
+
     #[error("{0:?}")]
     Execution(ContractExecutionError),
 }
@@ -141,6 +144,7 @@ impl From<PaymasterExecutionError> for Error {
             PaymasterExecutionError::CalldataParsing(_) => Self::CalldataParsing,
             PaymasterExecutionError::MaxAmountTooLow(_) => Self::MaxAmountTooLow,
             PaymasterExecutionError::PoolFeeTooLow(_) => Self::PoolFeeTooLow,
+            PaymasterExecutionError::MaxL2GasAmountExceeded(msg) => Self::MaxL2GasAmountExceeded(msg),
             other => Self::Execution(ContractExecutionError::Message(other.to_string())),
         }
     }
@@ -167,6 +171,7 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::CalldataParsing => ErrorObject::borrowed(166, "An error occurred (CALLDATA_PARSING)", None),
             Error::PoolFeeTooLow => ErrorObject::borrowed(167, "An error occurred (POOL_FEE_TOO_LOW)", None),
             Error::SponsoredPrivateRequiresPrivacy => ErrorObject::borrowed(168, "An error occurred (SPONSORED_PRIVATE_REQUIRES_PRIVACY)", None),
+            Error::MaxL2GasAmountExceeded(msg) => ErrorObject::owned(169, "An error occurred (MAX_L2_GAS_AMOUNT_EXCEEDED)", Some(msg)),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),

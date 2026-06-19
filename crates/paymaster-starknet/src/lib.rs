@@ -115,6 +115,9 @@ pub enum Error {
 
     #[error("starknet error {0}")]
     ValidationFailure(String),
+
+    #[error("required L2 gas amount {required} exceeds the maximum allowed by the sequencer {max}")]
+    MaxL2GasAmountExceeded { required: u64, max: u64 },
 }
 
 impl From<ProviderError> for Error {
@@ -151,6 +154,12 @@ impl<T: Display + Debug> From<AccountError<T>> for Error {
     }
 }
 
+/// Default for [`Configuration::max_l2_gas_amount`]. Kept as a function so it can be used as a serde
+/// default for configs that omit the field.
+pub fn default_max_l2_gas_amount() -> u64 {
+    transaction::DEFAULT_MAX_L2_GAS_AMOUNT
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Configuration {
     pub chain_id: ChainID,
@@ -159,6 +168,12 @@ pub struct Configuration {
 
     #[serde(default)]
     pub fallbacks: Vec<String>,
+
+    /// Maximum L2 gas amount the paymaster will declare as a transaction bound. Mirrors the Starknet
+    /// sequencer gateway `max_l2_gas_amount` (minus a safety margin) and is configurable since the
+    /// sequencer value may change over time.
+    #[serde(default = "default_max_l2_gas_amount")]
+    pub max_l2_gas_amount: u64,
 }
 
 #[derive(Clone)]

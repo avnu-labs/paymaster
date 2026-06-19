@@ -41,6 +41,9 @@ pub enum Error {
     #[error("pool fee amount too low. Expected at least {0}")]
     PoolFeeTooLow(String),
 
+    #[error("required L2 gas amount exceeds the maximum allowed by the sequencer: {0}")]
+    MaxL2GasAmountExceeded(String),
+
     #[error("execution error {0}")]
     Execution(String),
 }
@@ -49,6 +52,7 @@ impl From<paymaster_starknet::Error> for Error {
     fn from(value: paymaster_starknet::Error) -> Self {
         match value {
             paymaster_starknet::Error::InvalidNonce(_) => Self::InvalidVersion,
+            e @ paymaster_starknet::Error::MaxL2GasAmountExceeded { .. } => Self::MaxL2GasAmountExceeded(e.to_string()),
             e => Self::Execution(e.to_string()),
         }
     }

@@ -65,6 +65,7 @@ pub async fn command_relayers_deploy(params: RelayersDeployCommandParameters) ->
         chain_id,
         fallbacks: vec![],
         timeout: configuration.starknet.timeout,
+        max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
     });
 
     // Assert the balance of master is greater than the amount of STRK needed for the deployment

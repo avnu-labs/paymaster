@@ -75,6 +75,7 @@ impl TestEnvironment {
             timeout: 10,
             endpoint,
             fallbacks: vec![],
+            max_l2_gas_amount: crate::default_max_l2_gas_amount(),
         };
 
         Self {
