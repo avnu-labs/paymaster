@@ -53,6 +53,8 @@ pub enum ServerActionError {
     TooManyActions,
     #[error("trailing data after declared actions")]
     TrailingData,
+    #[error("invalid screening attestation suffix variant: {0}")]
+    InvalidScreeningSuffix(u64),
 }
 
 /// Cursor-based parser for Cairo-serialized data
@@ -194,9 +196,11 @@ fn parse_action(cursor: &mut Cursor) -> Result<ServerAction, ServerActionError> 
 
 /// Parse ServerActions from `apply_actions` calldata.
 ///
-/// The `apply_actions` function signature is `apply_actions(actions: Span<ServerAction>)`.
-/// Cairo serializes `Span<T>` as `[len, elem0, elem1, ...]`.
-/// The calldata starts with the span length, followed by all serialized actions.
+/// The `apply_actions` signature is `apply_actions(actions: Span<ServerAction>, screening:
+/// Option<ScreeningAttestation>)`. Cairo serializes `Span<T>` as `[len, elem0, elem1, ...]`, so the
+/// calldata starts with the span length followed by all serialized actions. The screening-capable
+/// pool appends a trailing `Option<ScreeningAttestation>`; pre-screening pools append nothing (both
+/// shapes are accepted here). See [`skip_screening_attestation`].
 const MAX_ACTIONS: usize = 1024;
 
 pub fn parse_server_actions(calldata: &[Felt]) -> Result<Vec<ServerAction>, ServerActionError> {
@@ -214,11 +218,30 @@ pub fn parse_server_actions(calldata: &[Felt]) -> Result<Vec<ServerAction>, Serv
         actions.push(parse_action(&mut cursor)?);
     }
 
+    // Consume the optional trailing `Option<ScreeningAttestation>`. The paymaster only relays this
+    // suffix verbatim (the contract verifies it); we just skip it so the gas-token transfer can
+    // still be located. Pre-screening pools emit no suffix, so an empty remainder stays valid.
+    if cursor.remaining() > 0 {
+        skip_screening_attestation(&mut cursor)?;
+    }
+
     if cursor.remaining() > 0 {
         return Err(ServerActionError::TrailingData);
     }
 
     Ok(actions)
+}
+
+/// Skip a trailing `Option<ScreeningAttestation>` (Cairo Serde encoding):
+///   - `None` => `[0x1]`
+///   - `Some(ScreeningAttestation { issued_at: u64, signature: (felt, felt) })`
+///     => `[0x0, issued_at, sig_r, sig_s]`
+fn skip_screening_attestation(cursor: &mut Cursor) -> Result<(), ServerActionError> {
+    match cursor.next_u64()? {
+        1 => Ok(()),                               // None
+        0 => cursor.next_array::<3>().map(|_| ()), // Some: issued_at, sig_r, sig_s
+        variant => Err(ServerActionError::InvalidScreeningSuffix(variant)),
+    }
 }
 
 #[cfg(test)]
@@ -452,5 +475,105 @@ mod tests {
         let calldata = vec![Felt::ONE, Felt::from(7u64), felt!("0x1"), felt!("0x2"), felt!("0x3"), felt!("0x4"), felt!("0x5")];
         let actions = parse_server_actions(&calldata).unwrap();
         assert!(matches!(&actions[0], ServerAction::EmitOpenNoteCreated { .. }));
+    }
+}
+
+/// Behaviour of [`parse_server_actions`] on the trailing `Option<ScreeningAttestation>`
+/// suffix that the screening-capable pool appends to `apply_actions` calldata.
+#[cfg(test)]
+mod parse_server_actions_screening_suffix {
+    use starknet::macros::felt;
+
+    use super::*;
+
+    /// Action span (TransferTo + WriteOnce) — the body shared by every case below.
+    fn two_actions() -> Vec<Felt> {
+        vec![
+            Felt::TWO, // 2 actions
+            // TransferTo (variant 3)
+            Felt::THREE,
+            felt!("0xFEE"),
+            felt!("0x111"),
+            Felt::from(100u64),
+            // WriteOnce (variant 0)
+            Felt::ZERO,
+            felt!("0x999"),
+            Felt::ONE,
+            felt!("0xDA1A"),
+        ]
+    }
+
+    #[test]
+    fn should_parse_actions_when_suffix_is_option_none() {
+        // given an action span followed by `Option::None` ([0x1]) from a non-deposit tx
+        let mut calldata = two_actions();
+        calldata.push(Felt::ONE);
+
+        // when the calldata is parsed
+        let actions = parse_server_actions(&calldata).unwrap();
+
+        // then the actions are returned and the suffix is consumed
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(&actions[0], ServerAction::TransferTo { .. }));
+        assert!(matches!(&actions[1], ServerAction::WriteOnce { .. }));
+    }
+
+    #[test]
+    fn should_parse_actions_when_suffix_is_option_some() {
+        // given an action span followed by `Option::Some(ScreeningAttestation)`
+        // ([0x0, issued_at, sig_r, sig_s]) from a deposit tx
+        let mut calldata = two_actions();
+        calldata.extend([
+            Felt::ZERO,                   // Some tag
+            Felt::from(1_750_000_000u64), // issued_at
+            felt!("0xAAA"),               // sig_r
+            felt!("0xBBB"),               // sig_s
+        ]);
+
+        // when the calldata is parsed
+        let actions = parse_server_actions(&calldata).unwrap();
+
+        // then the actions are returned and the attestation is consumed
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(&actions[1], ServerAction::WriteOnce { .. }));
+    }
+
+    #[test]
+    fn should_error_when_suffix_variant_is_invalid() {
+        // given a trailing felt that is neither None (1) nor Some (0)
+        let mut calldata = two_actions();
+        calldata.push(Felt::TWO);
+
+        // when the calldata is parsed
+        let result = parse_server_actions(&calldata);
+
+        // then it is rejected as an invalid screening suffix
+        assert_eq!(result, Err(ServerActionError::InvalidScreeningSuffix(2)));
+    }
+
+    #[test]
+    fn should_error_when_some_suffix_is_truncated() {
+        // given a `Some` suffix missing its signature felts
+        let mut calldata = two_actions();
+        calldata.extend([Felt::ZERO, Felt::from(1u64)]); // Some tag + issued_at only
+
+        // when the calldata is parsed
+        let result = parse_server_actions(&calldata);
+
+        // then it is rejected as ended unexpectedly
+        assert_eq!(result, Err(ServerActionError::UnexpectedEnd));
+    }
+
+    #[test]
+    fn should_error_when_data_trails_after_suffix() {
+        // given an extra felt after a complete `Option::None` suffix
+        let mut calldata = two_actions();
+        calldata.extend([Felt::ONE, felt!("0xBAD")]);
+
+        // when the calldata is parsed
+        let result = parse_server_actions(&calldata);
+
+        // then the genuine trailing data is rejected
+        assert_eq!(result, Err(ServerActionError::TrailingData));
     }
 }
