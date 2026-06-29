@@ -39,7 +39,7 @@ serde_json = "1.0.139"
 serde_with = "3.14.0"
 simple_logger = "5.0.0"
 starknet = { package = "starknet-rust", git = "https://github.com/software-mansion/starknet-rust" }
-testcontainers = "0.23.3"
+testcontainers = "0.27.3"
 thiserror = "2.0.11"
 tokio = "1.43.0"
 tower = "0.4"
