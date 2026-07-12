@@ -36,6 +36,8 @@ pub enum ServerAction {
     EmitNoteUsed { nullifier: Felt },
     /// Variant 10: Invoke { contract_address: ContractAddress, calldata: Span<felt252> }
     Invoke { contract_address: Felt, calldata: Vec<Felt> },
+    /// Variant 11: InvokeWithComputation { contract_address: ContractAddress, calldata: Span<felt252> }
+    InvokeWithComputation { contract_address: Felt, calldata: Vec<Felt> },
 }
 
 /// Error type for ServerAction parsing
@@ -190,6 +192,11 @@ fn parse_action(cursor: &mut Cursor) -> Result<ServerAction, ServerActionError> 
             let calldata = cursor.next_span()?;
             Ok(ServerAction::Invoke { contract_address, calldata })
         },
+        11 => {
+            let contract_address = cursor.next()?;
+            let calldata = cursor.next_span()?;
+            Ok(ServerAction::InvokeWithComputation { contract_address, calldata })
+        },
         _ => Err(ServerActionError::UnknownVariant(variant)),
     }
 }
@@ -311,6 +318,54 @@ mod tests {
                 calldata: vec![felt!("0xD"), felt!("0xE")],
             }
         );
+    }
+
+    #[test]
+    fn parse_invoke_with_computation_variable_length() {
+        let calldata = vec![
+            Felt::ONE,         // 1 action
+            Felt::from(11u64), // variant 11 = InvokeWithComputation
+            felt!("0x456"),    // contract_address
+            Felt::TWO,         // span length = 2
+            felt!("0xD"),
+            felt!("0xE"),
+        ];
+        let actions = parse_server_actions(&calldata).unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            actions[0],
+            ServerAction::InvokeWithComputation {
+                contract_address: felt!("0x456"),
+                calldata: vec![felt!("0xD"), felt!("0xE")],
+            }
+        );
+    }
+
+    /// A compute-and-invoke `apply_actions` span carries an `InvokeWithComputation` action
+    /// alongside the fee `TransferTo` that repays the relayer; both must decode so fee
+    /// discovery can locate the transfer.
+    #[test]
+    fn parse_invoke_with_computation_alongside_fee_transfer() {
+        let calldata = vec![
+            Felt::TWO, // 2 actions
+            // Action 0: InvokeWithComputation (variant 11)
+            Felt::from(11u64),
+            felt!("0x456"), // contract_address
+            Felt::ONE,      // span length = 1
+            felt!("0xD"),
+            // Action 1: TransferTo (variant 3) — fee to forwarder
+            Felt::THREE,
+            felt!("0xFEE"),     // to_addr (forwarder)
+            felt!("0x111"),     // token
+            Felt::from(100u64), // amount
+        ];
+        let actions = parse_server_actions(&calldata).unwrap();
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(&actions[0], ServerAction::InvokeWithComputation { .. }));
+        assert!(matches!(
+            &actions[1],
+            ServerAction::TransferTo { to_addr, amount, .. } if *to_addr == felt!("0xFEE") && *amount == 100
+        ));
     }
 
     #[test]
