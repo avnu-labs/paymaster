@@ -42,7 +42,7 @@ starknet = { package = "starknet-rust", git = "https://github.com/software-mansi
 testcontainers = "0.27.3"
 thiserror = "2.0.11"
 tokio = "1.43.0"
-tower = "0.4"
+tower = "0.5"
 tower-http = "0.5"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
