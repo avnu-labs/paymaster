@@ -166,35 +166,77 @@ impl ExecutableDirectInvokeParameters {
     /// Extract gas transfer from a raw execute_from_outside call
     ///
     /// The execute_from_outside_call has calldata structure:
-    /// [caller, nonce, execute_after, execute_before, calls_array...]
-    /// where calls_array is [num_calls, ...encoded_calls]
-    /// and each call is [to, selector, calldata_len, ...calldata]
+    /// [caller, nonce..., execute_after, execute_before, calls_len, ...calls, sig_len, sig...]
+    /// where each call is [to, selector, calldata_len, ...calldata] and the nonce may be one or two felts.
     ///
     /// For non-sponsored transactions, the last call should be a transfer of gas token to the forwarder.
     fn find_gas_token_transfer(&self, forwarder: Felt) -> Result<TokenTransfer, Error> {
-        let calls: Vec<Felt> = self.execute_from_outside_call.calldata.iter().skip(5).cloned().collect();
+        fn extract_calls_segment<'a>(calldata: &'a [Felt], calls_len_index: usize) -> Option<&'a [Felt]> {
+            let calls_len_felt = calldata.get(calls_len_index)?;
+            let calls_len: usize = (*calls_len_felt).try_into().ok()?;
+            if calls_len == 0 {
+                return None;
+            }
 
-        let decoder = SequentialCalldataDecoder::new(&calls)?;
-        let last_call = decoder.last().ok_or(Error::InvalidTypedData)?;
+            let mut offset = calls_len_index + 1;
+            for _ in 0..calls_len {
+                let length_index = offset.checked_add(2)?;
+                let length_felt = calldata.get(length_index)?;
+                let length: usize = (*length_felt).try_into().ok()?;
+                let next_offset = offset.checked_add(3)?.checked_add(length)?;
+                if calldata.len() < next_offset {
+                    return None;
+                }
+                offset = next_offset;
+            }
 
-        // Validate the last call is a transfer to the forwarder
-        if last_call.selector != selector!("transfer") {
-            return Err(Error::InvalidTypedData);
+            let sig_len_felt = calldata.get(offset)?;
+            let sig_len: usize = (*sig_len_felt).try_into().ok()?;
+            let expected_end = offset.checked_add(1)?.checked_add(sig_len)?;
+            if expected_end != calldata.len() {
+                return None;
+            }
+
+            calldata.get((calls_len_index + 1)..offset)
         }
 
-        if last_call.calldata.len() != 3 {
-            return Err(Error::InvalidTypedData);
+        let calldata = &self.execute_from_outside_call.calldata;
+        for calls_len_index in [4usize, 5] {
+            let Some(calls) = extract_calls_segment(calldata, calls_len_index) else {
+                continue;
+            };
+            let Ok(decoder) = SequentialCalldataDecoder::new(calls) else {
+                continue;
+            };
+            let Some(last_call) = decoder.last() else {
+                continue;
+            };
+
+            // Validate the last call is a transfer to the forwarder.
+            if last_call.selector != selector!("transfer") {
+                continue;
+            }
+
+            if last_call.calldata.len() != 3 {
+                continue;
+            }
+
+            let Some(recipient) = last_call.calldata.first() else {
+                continue;
+            };
+
+            if *recipient != forwarder {
+                continue;
+            }
+
+            let Some(amount) = last_call.calldata.get(1) else {
+                continue;
+            };
+
+            return Ok(TokenTransfer::new(last_call.to, forwarder, *amount));
         }
 
-        let recipient = last_call.calldata.first().ok_or(Error::InvalidTypedData)?;
-
-        if *recipient != forwarder {
-            return Err(Error::InvalidTypedData);
-        }
-
-        let amount = last_call.calldata.get(1).ok_or(Error::InvalidTypedData)?;
-
-        Ok(TokenTransfer::new(last_call.to, forwarder, *amount))
+        Err(Error::InvalidTypedData)
     }
 }
 
@@ -590,7 +632,7 @@ mod tests {
         let amount = felt!("0x789");
 
         // Build a simple execute_from_outside call with one user call + gas transfer
-        // Structure: [caller, nonce, execute_after, execute_before, num_calls, call1..., call2...]
+        // Structure: [caller, nonce, execute_after, execute_before, num_calls, call1..., call2..., sig_len, sig...]
         let calldata = vec![
             felt!("0x1"), // caller
             felt!("0x2"), // nonce
@@ -611,6 +653,9 @@ mod tests {
             forwarder,             // recipient (forwarder)
             amount,                // amount_low
             Felt::ZERO,            // amount_high
+            Felt::TWO,             // signature length
+            felt!("0xDEAD"),       // signature part 1
+            felt!("0xBEEF"),       // signature part 2
         ];
 
         let parameters = ExecutableDirectInvokeParameters {
@@ -618,6 +663,57 @@ mod tests {
             execute_from_outside_call: Call {
                 to: felt!("0x999"),
                 selector: selector!("execute_from_outside"),
+                calldata,
+            },
+        };
+
+        let result = parameters.find_gas_token_transfer(forwarder);
+        assert!(result.is_ok());
+
+        let transfer = result.unwrap();
+        assert_eq!(transfer.token(), token);
+        assert_eq!(transfer.recipient(), forwarder);
+        assert_eq!(transfer.amount(), amount);
+    }
+
+    #[test]
+    fn extract_gas_transfer_from_raw_call_v3_with_signature_works() {
+        let forwarder = felt!("0x123");
+        let token = felt!("0x456");
+        let amount = felt!("0x789");
+
+        // Structure: [caller, nonce_low, nonce_high, execute_after, execute_before, num_calls, call1..., call2..., sig_len, sig...]
+        let calldata = vec![
+            felt!("0x1"), // caller
+            felt!("0x2"), // nonce_low
+            felt!("0x3"), // nonce_high
+            felt!("0x4"), // execute_after
+            felt!("0x5"), // execute_before
+            Felt::TWO,    // num_calls = 2
+            // First call (user's transfer)
+            felt!("0xAAA"),        // to
+            selector!("transfer"), // selector
+            Felt::THREE,           // calldata_len
+            felt!("0xBBB"),        // recipient
+            felt!("0xCCC"),        // amount_low
+            Felt::ZERO,            // amount_high
+            // Second call (gas transfer to forwarder)
+            token,                 // to (token address)
+            selector!("transfer"), // selector
+            Felt::THREE,           // calldata_len
+            forwarder,             // recipient (forwarder)
+            amount,                // amount_low
+            Felt::ZERO,            // amount_high
+            Felt::TWO,             // signature length
+            felt!("0xDEAD"),       // signature part 1
+            felt!("0xBEEF"),       // signature part 2
+        ];
+
+        let parameters = ExecutableDirectInvokeParameters {
+            user: Felt::ZERO,
+            execute_from_outside_call: Call {
+                to: felt!("0x999"),
+                selector: selector!("execute_from_outside_v3"),
                 calldata,
             },
         };
@@ -648,6 +744,9 @@ mod tests {
             forwarder,            // recipient
             felt!("0x789"),       // amount_low
             Felt::ZERO,           // amount_high
+            Felt::TWO,            // signature length
+            felt!("0xDEAD"),      // signature part 1
+            felt!("0xBEEF"),      // signature part 2
         ];
 
         let parameters = ExecutableDirectInvokeParameters {
@@ -681,6 +780,9 @@ mod tests {
             wrong_recipient,       // wrong recipient
             felt!("0xAAA"),        // amount_low
             Felt::ZERO,            // amount_high
+            Felt::TWO,             // signature length
+            felt!("0xDEAD"),       // signature part 1
+            felt!("0xBEEF"),       // signature part 2
         ];
 
         let parameters = ExecutableDirectInvokeParameters {
