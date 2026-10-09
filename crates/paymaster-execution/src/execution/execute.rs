@@ -480,6 +480,11 @@ impl ExecutableTransaction {
             None => (Felt::ZERO, Felt::ZERO),
         };
 
+        // The forwarder emits the sponsor metadata on-chain. When the sponsor also covers the pool fee,
+        // that would tag every private transaction it pays for with the sponsor's identity, so the
+        // metadata is left empty. Billing such a sponsor relies on the sponsoring backend, off-chain.
+        let sponsor_metadata = if self.sponsor_pool_fee { vec![] } else { sponsor_metadata };
+
         let forwarder_call = Call {
             to: self.forwarder,
             selector: selector!("execute_private_sponsored"),
@@ -1070,6 +1075,35 @@ mod tests {
             let result = build(&transaction(vec![Felt::TWO, Felt::from(3u8)], true));
 
             assert!(matches!(result, Err(Error::CalldataParsing(_))));
+        }
+
+        fn build_with_metadata(transaction: &ExecutableTransaction, sponsor_metadata: Vec<Felt>) -> Vec<Call> {
+            let ExecutableTransactionParameters::ApplyAction { apply_action } = &transaction.transaction else {
+                unreachable!()
+            };
+            let calls = transaction
+                .build_private_sponsored_calls(None, apply_action, sponsor_metadata)
+                .unwrap();
+            calls.iter().cloned().collect()
+        }
+
+        #[test]
+        fn should_not_emit_sponsor_metadata_when_pool_fee_is_sponsored() {
+            let calls = build_with_metadata(&transaction(registration_actions(), true), vec![felt!("0x5350")]);
+
+            // The forwarder calldata ends with an empty metadata array: [..., gas_amount.high, 0]
+            let calldata = &calls.last().unwrap().calldata;
+            assert_eq!(calldata.last(), Some(&Felt::ZERO));
+            assert!(!calldata.contains(&felt!("0x5350")));
+        }
+
+        #[test]
+        fn should_keep_sponsor_metadata_when_pool_fee_is_not_sponsored() {
+            let calls = build_with_metadata(&transaction(actions_with_fee_withdrawal(POOL_FEE), false), vec![felt!("0x5350")]);
+
+            // The forwarder calldata ends with the metadata array: [..., 1, 0x5350]
+            let calldata = &calls.last().unwrap().calldata;
+            assert_eq!(&calldata[calldata.len() - 2..], &[Felt::ONE, felt!("0x5350")]);
         }
     }
 }

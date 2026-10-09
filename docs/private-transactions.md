@@ -39,9 +39,11 @@ The permission is granted by the sponsoring backend:
 | `webhook` | Return `"sponsor_pool_fee": true` in the API key validation response (field is optional, defaults to `false`) |
 | `self` | Set `"sponsor_pool_fee": true` in the self-sponsoring configuration (optional, defaults to `false`) |
 
-Billing the sponsor for the gas and pool fee it covers is the sponsoring backend's responsibility. On-chain, sponsored transactions emit the forwarder's `SponsoredTransaction` event with the API key's `sponsor_metadata`.
+Billing the sponsor for the gas and pool fee it covers is the sponsoring backend's responsibility. On-chain, sponsored transactions emit the forwarder's `SponsoredTransaction` event. For keys with pool fee sponsoring, that event carries an **empty** `sponsor_metadata` on private transactions: emitting the key's metadata would publicly tag every private transaction the sponsor pays for with its identity. Other sponsored transactions keep emitting the key's `sponsor_metadata` as before.
 
-> **Privacy note:** a fully sponsored transaction has no public `pool → forwarder` fee withdrawal, which distinguishes it from transactions where the user pays the pool fee. It reveals that the transaction was sponsored, not by whom.
+In `self` sponsoring mode there is no backend to enforce a budget: every request authenticated with the configured key is sponsored, pool fee included. Only enable `sponsor_pool_fee` there for keys you fully control.
+
+> **Privacy note:** a fully sponsored transaction has no public `pool → forwarder` fee withdrawal, which distinguishes it from transactions where the user pays the pool fee. It reveals that the transaction was sponsored, not by whom, as long as the sponsor metadata is not emitted (see above).
 
 ## Sponsored Private Transaction Flow
 
@@ -485,5 +487,5 @@ Every relayed transaction could include a private transfer to the paymaster oper
 
 ### Pool fee read from configuration
 
-The relayer pre-transfers `privacy.pool_fee_amount` (from configuration) to the forwarder, while the forwarder approves the pool for `get_fee_amount()` read from the pool. If the pool raises its fee above the configured amount, private transactions revert until the configuration is updated. Reading the fee from the pool at execution time would remove this drift.
+The relayer pre-transfers `privacy.pool_fee_amount` (from configuration) to the forwarder, while the forwarder approves the pool for `get_fee_amount()` read from the pool. If the pool raises its fee above the configured amount, private transactions revert until the configuration is updated. If it lowers its fee, the difference is pre-transferred on every private transaction and stays in the forwarder. This is not hypothetical: the mainnet pool fee went from 6 to 4 STRK in September 2026. Reading the fee from the pool at execution time would remove this drift.
 
