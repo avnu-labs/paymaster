@@ -1,8 +1,11 @@
 mod configuration;
 pub use configuration::{Configuration, RPCConfiguration, DEFAULT_PRIVACY_GAS_OVERHEAD};
-use paymaster_execution::{Client as ExecutionClient, TransactionDuplicateFilter};
+use paymaster_execution::{Client as ExecutionClient, Error as ExecutionError, TransactionDuplicateFilter};
 use paymaster_prices::Client as PriceClient;
 use paymaster_sponsoring::Client as SponsoringClient;
+use starknet::core::types::Felt;
+
+use crate::Error;
 
 #[derive(Clone)]
 pub struct Context {
@@ -26,5 +29,18 @@ impl Context {
 
             configuration,
         }
+    }
+
+    /// Resolve the fee charged by the configured privacy pool. Fails when no privacy pool is configured
+    pub async fn resolve_privacy_pool_fee(&self) -> Result<u128, Error> {
+        if self.configuration.privacy_pool == Felt::ZERO {
+            return Err(ExecutionError::PrivacyPoolNotWhitelisted.into());
+        }
+
+        Ok(self
+            .execution
+            .starknet
+            .resolve_privacy_pool_fee(self.configuration.privacy_pool)
+            .await?)
     }
 }
