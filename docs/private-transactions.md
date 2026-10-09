@@ -17,7 +17,7 @@ On-chain, the paymaster wraps everything into a single transaction via the forwa
 | **`sponsored_private`** (recommended) | Paid by relayer | Paid by user from private balance | User's choice via `fee_mode.pool_fee_token` |
 | **`default`** (gasless) | Paid by user from private balance | Paid by user from private balance | User's choice via `fee_mode.gas_token` |
 
-- In **`sponsored`** mode, the `fee_action` returned by `buildTransaction` always uses STRK as the token. The pool fee amount is a fixed server-side configuration (`privacy.pool_fee_amount`).
+- In **`sponsored`** mode, the `fee_action` returned by `buildTransaction` always uses STRK as the token. The pool fee amount is read from the pool (`get_fee_amount()`) when the transaction is built and executed, so it always matches what the forwarder approves on-chain.
 - In **`sponsored_private`** mode, the relayer pays gas (same as sponsored), but the user chooses which token to pay the pool fee in via `pool_fee_token` (ETH, USDC, STRK…). The pool fee amount is converted from the base STRK amount to the chosen token using the price oracle. This mode is **only valid for private transaction types** (`apply_action` / `invoke_and_apply_action`) — using it with `deploy`, `invoke`, or `deploy_and_invoke` returns error **168** (`SPONSORED_PRIVATE_REQUIRES_PRIVACY`).
 - In **`default`** (gasless) mode, the user chooses the fee token (STRK, USDC, ETH…) and pays both gas + pool fee from their private balance in that token.
 
@@ -410,7 +410,7 @@ Private transaction support is configured under the `privacy` section of the ser
 | Field | Description |
 |---|---|
 | `pool` | Address of the privacy pool contract |
-| `pool_fee_amount` | Pool's `collect_fee` cost in STRK (decimal string). This is the base amount converted to the chosen token in `sponsored_private` mode |
+| `pool_fee_amount` | Enables pool fee handling when non-zero (`0` disables it), and is the fallback fee in STRK (decimal string) if the pool's `get_fee_amount()` cannot be read. The fee actually used is read from the pool; it is the base amount converted to the chosen token in `sponsored_private` mode |
 | `gas_overhead` | L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.). Used at build time to estimate fees before the proof is available |
 
 ## See Also

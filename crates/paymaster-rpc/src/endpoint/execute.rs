@@ -145,13 +145,23 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;
 
+    // Private transactions pre-transfer and collect the pool's current fee, which is what the
+    // forwarder approves on-chain. Other transactions never touch the pool.
+    let privacy_pool_fee_amount = if request.transaction.is_private() {
+        ctx.execution
+            .resolve_privacy_pool_fee(ctx.configuration.privacy_pool, ctx.configuration.privacy_pool_fee_amount)
+            .await
+    } else {
+        ctx.configuration.privacy_pool_fee_amount
+    };
+
     let transaction = ExecutableTransaction {
         forwarder,
         gas_tank_address,
         parameters: request.parameters.into(),
         transaction: request.transaction.try_into()?,
         privacy_pool: ctx.configuration.privacy_pool,
-        privacy_pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        privacy_pool_fee_amount,
     };
 
     ctx.transaction_filter.filter(&transaction.transaction)?;

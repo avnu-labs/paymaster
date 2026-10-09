@@ -268,10 +268,16 @@ async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> 
         calls: Calls::new(inv.calls),
     });
 
+    // Quote the pool's current fee: it is what the forwarder will approve at execution
+    let pool_fee_amount = ctx
+        .execution
+        .resolve_privacy_pool_fee(pool_address, ctx.configuration.privacy_pool_fee_amount)
+        .await;
+
     let transaction = PrivateTransaction {
         forwarder: ctx.configuration.forwarder,
         parameters: request.parameters.into(),
-        pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        pool_fee_amount,
         privacy_gas_overhead: ctx.configuration.privacy_gas_overhead,
         user_calls,
     };
