@@ -23,6 +23,26 @@ On-chain, the paymaster wraps everything into a single transaction via the forwa
 
 All fee modes accept an optional `tip` priority: `slow`, `normal`, or `fast`.
 
+### Sponsored pool fee
+
+An API key can additionally be granted **pool fee sponsoring**. For such a key, `sponsored` and `sponsored_private` requests on private transaction types are fully sponsored: the relayer pays both gas and the pool fee, and the user pays nothing.
+
+- `buildTransaction` returns **no `fee_action`**. The wallet must not add a fee withdrawal to the proof.
+- `executeTransaction` accepts proofs without a fee withdrawal. The forwarder is called with a zero gas amount: it still approves the pool fee pre-transferred by the relayer, but expects nothing from the user. If the proof contains a fee withdrawal to the forwarder anyway, it is still collected.
+- This makes **relayed registration** possible: a proof containing only setup actions (set viewing key, open channels/subchannels) and no notes can be relayed for a user holding no STRK.
+- The permission is per API key and off by default. Requests from other keys, and all `default` (gasless) requests, behave exactly as before.
+
+The permission is granted by the sponsoring backend:
+
+| Sponsoring mode | How to grant it |
+|---|---|
+| `webhook` | Return `"sponsor_pool_fee": true` in the API key validation response (field is optional, defaults to `false`) |
+| `self` | Set `"sponsor_pool_fee": true` in the self-sponsoring configuration (optional, defaults to `false`) |
+
+Billing the sponsor for the gas and pool fee it covers is the sponsoring backend's responsibility. On-chain, sponsored transactions emit the forwarder's `SponsoredTransaction` event with the API key's `sponsor_metadata`.
+
+> **Privacy note:** a fully sponsored transaction has no public `pool → forwarder` fee withdrawal, which distinguishes it from transactions where the user pays the pool fee. It reveals that the transaction was sponsored, not by whom.
+
 ## Sponsored Private Transaction Flow
 
 Two transaction types depending on whether user calls (e.g. approve) are needed:
@@ -149,6 +169,8 @@ The response contains:
 - **`typed_data`** (only for `invoke_and_apply_action`): an `execute_from_outside` message wrapping the user calls (e.g. approve). The wallet must ask the user to sign it.
 
 > **Note:** If `fee_action.amount` is `0x0`, the pool fee is zero and the wallet can skip the fee withdraw in the proof.
+
+> **Note:** If `fee_action` is absent, the API key's sponsor covers every fee (see [Sponsored pool fee](#sponsored-pool-fee)). The wallet must not add a fee withdraw to the proof.
 
 ### 2. Build the proof
 
@@ -393,6 +415,29 @@ await paymaster.executeTransaction({
 });
 ```
 
+### Fully Sponsored Registration (pool fee sponsored by the API key)
+
+```ts
+// 1. Build — the API key has pool fee sponsoring, so no fee_action is returned
+const build = await paymaster.buildTransaction({
+  transaction: { type: "apply_action", apply_action: { pool_address: POOL } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+});
+// build.fee_action === undefined
+
+// 2. Generate a proof with setup actions only (viewing key, channels), no notes and no fee withdraw
+const { call, proof } = await registration.execute({ provingBlockId });
+
+// 3. Execute — the relayer pays gas and the pool fee
+await paymaster.executeTransaction({
+  transaction: {
+    type: "apply_action",
+    apply_action: { apply_actions_call: call, proof: proof.data, proof_facts: proof.proofFacts },
+  },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+});
+```
+
 ## Server Configuration
 
 Private transaction support is configured under the `privacy` section of the service configuration:
@@ -417,3 +462,28 @@ Private transaction support is configured under the `privacy` section of the ser
 
 - [OpenRPC specification](specification/paymaster.openrpc.json) — full schema for `apply_action`, `invoke_and_apply_action`, `fee_mode`, and `fee_action`
 - [Forwarder contract](../contracts/README.md) — `execute_private` / `execute_private_sponsored` entrypoints
+
+## Open Topics (not implemented)
+
+### Funding a sponsor's balance
+
+Pool fee sponsoring moves the pool fee cost from users to the sponsor, who must be billed for it off-chain. This repository only exposes the per-key permission. The sponsor's balance, budgets and rate limits live in the sponsoring backend behind the webhook, and should bound how much each key can spend.
+
+Ideally that balance can be topped up two ways:
+
+- **Publicly:** a STRK transfer from the sponsor to the paymaster operator.
+- **Privately:** a private transfer, inside the privacy pool, to a shielded account owned by the paymaster operator. Individual sponsored transactions are then not linkable to the sponsor on-chain.
+
+A sponsor cannot pay per transaction from its own shielded balance: a proof covers a single user, so another account's notes cannot be spent inside the user's proof.
+
+### Uniform fee note
+
+Every relayed transaction could include a private transfer to the paymaster operator's shielded account: the real fee when the user pays it, zero when the transaction is sponsored. The operator would check it with its viewing key before broadcasting. All relayed transactions would then look identical on-chain, removing the sponsored/self-paid distinction described above. Open points:
+
+- Whether the SDK and the pool allow zero-value notes.
+- Opening a first channel to the operator's account interacts with the SDK's `USER_LINKAGE` warning, which is raised when one transaction opens more than one channel.
+
+### Pool fee read from configuration
+
+The relayer pre-transfers `privacy.pool_fee_amount` (from configuration) to the forwarder, while the forwarder approves the pool for `get_fee_amount()` read from the pool. If the pool raises its fee above the configured amount, private transactions revert until the configuration is updated. Reading the fee from the pool at execution time would remove this drift.
+

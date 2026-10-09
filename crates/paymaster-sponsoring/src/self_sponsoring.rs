@@ -7,6 +7,7 @@ use crate::{AuthenticatedApiKey, Error, SelfConfiguration};
 pub struct SelfSponsoring {
     api_key: String,
     sponsor_metadata: Vec<Felt>,
+    sponsor_pool_fee: bool,
 }
 
 impl SelfSponsoring {
@@ -17,12 +18,13 @@ impl SelfSponsoring {
         Ok(Self {
             api_key: configuration.api_key,
             sponsor_metadata: configuration.sponsor_metadata,
+            sponsor_pool_fee: configuration.sponsor_pool_fee,
         })
     }
 
     pub fn validate(&self, key: &str) -> AuthenticatedApiKey {
         if key == self.api_key {
-            AuthenticatedApiKey::valid(self.sponsor_metadata.clone())
+            AuthenticatedApiKey::valid(self.sponsor_metadata.clone()).with_pool_fee_sponsoring(self.sponsor_pool_fee)
         } else {
             AuthenticatedApiKey::invalid()
         }
@@ -46,6 +48,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![Felt::ZERO],
+                sponsor_pool_fee: false,
             };
 
             // When
@@ -70,6 +73,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![],
+                sponsor_pool_fee: false,
             };
             let auth = SelfSponsoring::new(config).unwrap();
 
@@ -79,6 +83,25 @@ mod tests {
             // Then
             assert!(status.is_valid);
             assert_eq!(&status.sponsor_metadata, &auth.sponsor_metadata);
+            assert!(!status.sponsor_pool_fee);
+        }
+
+        #[test]
+        fn should_propagate_pool_fee_sponsoring_when_enabled() {
+            // Given
+            let config = SelfConfiguration {
+                api_key: "paymaster_123456".to_string(),
+                sponsor_metadata: vec![],
+                sponsor_pool_fee: true,
+            };
+            let auth = SelfSponsoring::new(config).unwrap();
+
+            // When
+            let status = auth.validate("paymaster_123456");
+
+            // Then
+            assert!(status.is_valid);
+            assert!(status.sponsor_pool_fee);
         }
 
         #[test]
@@ -88,6 +111,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![],
+                sponsor_pool_fee: false,
             };
             let auth = SelfSponsoring::new(config).unwrap();
 
@@ -97,6 +121,7 @@ mod tests {
             // Then
             assert!(!status.is_valid);
             assert_eq!(status.sponsor_metadata, vec![]);
+            assert!(!status.sponsor_pool_fee);
         }
     }
 }

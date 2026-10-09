@@ -145,19 +145,21 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;
 
-    let transaction = ExecutableTransaction {
+    let mut transaction = ExecutableTransaction {
         forwarder,
         gas_tank_address,
         parameters: request.parameters.into(),
         transaction: request.transaction.try_into()?,
         privacy_pool: ctx.configuration.privacy_pool,
         privacy_pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        sponsor_pool_fee: false,
     };
 
     ctx.transaction_filter.filter(&transaction.transaction)?;
 
     let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
         let authenticated_api_key = ctx.validate_api_key().await?;
+        transaction.sponsor_pool_fee = authenticated_api_key.sponsor_pool_fee;
         transaction
             .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
             .await?

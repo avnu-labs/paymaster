@@ -684,8 +684,7 @@
             "required": [
               "type",
               "parameters",
-              "fee",
-              "fee_action"
+              "fee"
             ],
             "properties": {
               "type": {
@@ -703,7 +702,7 @@
               },
               "fee_action": {
                 "title": "Fee action",
-                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof. Omitted when the API key's sponsor covers both gas and the pool fee: the proof must then not include a fee withdrawal",
                 "$ref": "#/components/schemas/FEE_ACTION"
               }
             }
@@ -715,8 +714,7 @@
               "type",
               "typed_data",
               "parameters",
-              "fee",
-              "fee_action"
+              "fee"
             ],
             "properties": {
               "type": {
@@ -739,7 +737,7 @@
               },
               "fee_action": {
                 "title": "Fee action",
-                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof. Omitted when the API key's sponsor covers both gas and the pool fee: the proof must then not include a fee withdrawal",
                 "$ref": "#/components/schemas/FEE_ACTION"
               }
             }

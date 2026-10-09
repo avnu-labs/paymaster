@@ -217,6 +217,11 @@ pub struct ExecutableTransaction {
 
     /// Pool's collect_fee cost in STRK, charged on top of gas for private transactions
     pub privacy_pool_fee_amount: u128,
+
+    /// Whether the sponsor also covers the pool fee of private sponsored transactions. When set,
+    /// the proof does not need to contain a fee withdrawal to the forwarder. Must only be set from
+    /// an authenticated API key that has been granted this permission.
+    pub sponsor_pool_fee: bool,
 }
 
 impl ExecutableTransaction {
@@ -265,8 +270,9 @@ impl ExecutableTransaction {
         // under the sequencer cap, so the typed MaxL2GasAmountExceeded error reaches the client.
         final_fee_estimate.check_l2_gas_within_cap()?;
 
-        // Validate pool fee transfer for private sponsored transactions
-        if self.privacy_pool_fee_amount > 0 {
+        // Validate pool fee transfer for private sponsored transactions. When the sponsor covers the
+        // pool fee, the user is not required to pay it, so there is no minimum to enforce.
+        if self.privacy_pool_fee_amount > 0 && !self.sponsor_pool_fee {
             if let Some(apply_action) = match &self.transaction {
                 ExecutableTransactionParameters::ApplyAction { apply_action } => Some(apply_action),
                 ExecutableTransactionParameters::InvokeAndApplyAction { apply_action, .. } => Some(apply_action),
@@ -422,6 +428,24 @@ impl ExecutableTransaction {
         Some(TokenTransfer::new(Token::STRK_ADDRESS, self.forwarder, Felt::from(self.privacy_pool_fee_amount)).to_call())
     }
 
+    /// Find the pool fee transfer paid by the user in a private sponsored transaction.
+    ///
+    /// Returns `None` when there is no pool fee, or when the sponsor covers the pool fee and the proof
+    /// carries no fee withdrawal. In the latter case the forwarder is called with a zero amount: it
+    /// still approves the pool fee pre-transferred by the relayer, but expects nothing from the user.
+    /// A fee withdrawal that is present anyway is still collected.
+    fn find_pool_fee_transfer(&self, apply_action: &ExecutableApplyActionParameters) -> Result<Option<TokenTransfer>, Error> {
+        if self.privacy_pool_fee_amount == 0 {
+            return Ok(None);
+        }
+
+        match apply_action.find_gas_token_transfer(self.forwarder) {
+            Ok(transfer) => Ok(Some(transfer)),
+            Err(Error::MissingFeeTransferTo) if self.sponsor_pool_fee => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Validate and build the inner calls for a private transaction (optional execute_from_outside + apply_actions)
     fn build_private_inner_calls(&self, invoke: Option<&ExecutableInvokeParameters>, apply_action: &ExecutableApplyActionParameters) -> Result<Vec<Call>, Error> {
         let apply_call = &apply_action.apply_actions_call;
@@ -451,11 +475,9 @@ impl ExecutableTransaction {
         let inner_calls = self.build_private_inner_calls(invoke, apply_action)?;
 
         // Extract pool fee transfer from apply_actions calldata (if pool fee > 0)
-        let (pool_fee_token, pool_fee_amount) = if self.privacy_pool_fee_amount > 0 {
-            let transfer = apply_action.find_gas_token_transfer(self.forwarder)?;
-            (transfer.token(), transfer.amount())
-        } else {
-            (Felt::ZERO, Felt::ZERO)
+        let (pool_fee_token, pool_fee_amount) = match self.find_pool_fee_transfer(apply_action)? {
+            Some(transfer) => (transfer.token(), transfer.amount()),
+            None => (Felt::ZERO, Felt::ZERO),
         };
 
         let forwarder_call = Call {
@@ -786,6 +808,7 @@ mod tests {
             },
             privacy_pool: Felt::ZERO,
             privacy_pool_fee_amount: 0,
+            sponsor_pool_fee: false,
         };
 
         let estimate = transaction.estimate_sponsored_transaction(&client, vec![]).await.unwrap();
@@ -848,6 +871,7 @@ mod tests {
             },
             privacy_pool: Felt::ZERO,
             privacy_pool_fee_amount: 0,
+            sponsor_pool_fee: false,
         };
 
         let estimate = transaction.estimate_transaction(&client).await.unwrap();
@@ -931,10 +955,121 @@ mod tests {
             },
             privacy_pool: Felt::ZERO,
             privacy_pool_fee_amount: 0,
+            sponsor_pool_fee: false,
         };
 
         let estimate = transaction.estimate_transaction(&client).await.unwrap();
         let result = estimate.execute(&client).await;
         assert!(result.is_ok())
+    }
+
+    mod private_sponsored_calls {
+        use paymaster_starknet::constants::Token;
+        use starknet::core::types::{Call, Felt};
+        use starknet::macros::{felt, selector};
+
+        use crate::execution::execute::{ExecutableApplyActionParameters, ExecutableTransaction, ExecutableTransactionParameters};
+        use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
+        use crate::Error;
+
+        const FORWARDER: Felt = felt!("0xf0");
+        const POOL: Felt = felt!("0xab");
+        const POOL_FEE: u128 = 4_000_000_000_000_000_000;
+
+        // EmitViewingKeySet only: what a registration proof looks like (no notes, no withdrawal)
+        fn registration_actions() -> Vec<Felt> {
+            vec![Felt::ONE, Felt::from(4u8), felt!("0x1234"), felt!("0x1"), felt!("0x2"), felt!("0x3"), felt!("0x4")]
+        }
+
+        fn actions_with_fee_withdrawal(amount: u128) -> Vec<Felt> {
+            vec![Felt::ONE, Felt::from(3u8), FORWARDER, Token::STRK_ADDRESS, Felt::from(amount)]
+        }
+
+        fn transaction(apply_actions_calldata: Vec<Felt>, sponsor_pool_fee: bool) -> ExecutableTransaction {
+            ExecutableTransaction {
+                forwarder: FORWARDER,
+                gas_tank_address: felt!("0x9a5"),
+                transaction: ExecutableTransactionParameters::ApplyAction {
+                    apply_action: ExecutableApplyActionParameters::new(
+                        Call {
+                            to: POOL,
+                            selector: selector!("apply_actions"),
+                            calldata: apply_actions_calldata,
+                        },
+                        "proof".to_string(),
+                        vec![],
+                    ),
+                },
+                parameters: ExecutionParameters::V1 {
+                    fee_mode: FeeMode::SponsoredPrivate {
+                        pool_fee_token: Token::STRK_ADDRESS,
+                        tip: TipPriority::Normal,
+                    },
+                    time_bounds: None,
+                },
+                privacy_pool: POOL,
+                privacy_pool_fee_amount: POOL_FEE,
+                sponsor_pool_fee,
+            }
+        }
+
+        fn build(transaction: &ExecutableTransaction) -> Result<Vec<Call>, Error> {
+            let ExecutableTransactionParameters::ApplyAction { apply_action } = &transaction.transaction else {
+                unreachable!()
+            };
+            let calls = transaction.build_private_sponsored_calls(None, apply_action, vec![])?;
+            Ok(calls.iter().cloned().collect())
+        }
+
+        // The forwarder calldata ends with [gas_token, gas_amount.low, gas_amount.high, sponsor_metadata_len]
+        fn forwarder_fee_args(calls: &[Call]) -> (Felt, Felt) {
+            let forwarder_call = calls.last().unwrap();
+            assert_eq!(forwarder_call.to, FORWARDER);
+            assert_eq!(forwarder_call.selector, selector!("execute_private_sponsored"));
+            let n = forwarder_call.calldata.len();
+            (forwarder_call.calldata[n - 4], forwarder_call.calldata[n - 3])
+        }
+
+        #[test]
+        fn should_require_fee_withdrawal_when_pool_fee_is_not_sponsored() {
+            let result = build(&transaction(registration_actions(), false));
+
+            assert!(matches!(result, Err(Error::MissingFeeTransferTo)));
+        }
+
+        #[test]
+        fn should_accept_proof_without_fee_withdrawal_when_pool_fee_is_sponsored() {
+            let calls = build(&transaction(registration_actions(), true)).unwrap();
+
+            // The relayer still pre-transfers the pool fee to the forwarder
+            assert_eq!(calls.len(), 2);
+            assert_eq!(calls[0].to, Token::STRK_ADDRESS);
+            assert_eq!(calls[0].selector, selector!("transfer"));
+            assert_eq!(calls[0].calldata, vec![FORWARDER, Felt::from(POOL_FEE), Felt::ZERO]);
+
+            // ...and the forwarder expects nothing from the user
+            assert_eq!(forwarder_fee_args(&calls), (Felt::ZERO, Felt::ZERO));
+        }
+
+        #[test]
+        fn should_still_collect_fee_withdrawal_when_pool_fee_is_sponsored() {
+            let calls = build(&transaction(actions_with_fee_withdrawal(POOL_FEE), true)).unwrap();
+
+            assert_eq!(forwarder_fee_args(&calls), (Token::STRK_ADDRESS, Felt::from(POOL_FEE)));
+        }
+
+        #[test]
+        fn should_keep_current_behaviour_when_pool_fee_is_not_sponsored() {
+            let calls = build(&transaction(actions_with_fee_withdrawal(POOL_FEE), false)).unwrap();
+
+            assert_eq!(forwarder_fee_args(&calls), (Token::STRK_ADDRESS, Felt::from(POOL_FEE)));
+        }
+
+        #[test]
+        fn should_not_hide_calldata_errors_when_pool_fee_is_sponsored() {
+            let result = build(&transaction(vec![Felt::TWO, Felt::from(3u8)], true));
+
+            assert!(matches!(result, Err(Error::CalldataParsing(_))));
+        }
     }
 }

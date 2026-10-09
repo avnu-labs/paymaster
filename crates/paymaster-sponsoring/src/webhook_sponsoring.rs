@@ -16,6 +16,8 @@ struct ApiKeyValidationResponse {
     is_valid: bool,
     sponsor_metadata: Vec<Felt>,
     validity_duration: u64,
+    #[serde(default)]
+    sponsor_pool_fee: bool,
 }
 
 #[derive(Clone)]
@@ -62,6 +64,7 @@ impl WebhookSponsoring {
                             AuthenticatedApiKey {
                                 is_valid: response.is_valid,
                                 sponsor_metadata: response.sponsor_metadata,
+                                sponsor_pool_fee: response.sponsor_pool_fee,
                             },
                             response.validity_duration,
                         ))

@@ -65,7 +65,7 @@ mod tests {
     async fn self_sponsoring_is_working_properly() {
         let test = TestEnvironment::new().await;
         let mut context = test.context().clone();
-        let config = SelfConfiguration {api_key: "paymaster_123456".to_string(), sponsor_metadata: vec![],};
+        let config = SelfConfiguration {api_key: "paymaster_123456".to_string(), sponsor_metadata: vec![], sponsor_pool_fee: false,};
         context.sponsoring = AuthenticationClient::new(&Configuration::SelfSponsoring(config));
     
         let no_api_key = RequestContext::new(&context, &Extensions::default());

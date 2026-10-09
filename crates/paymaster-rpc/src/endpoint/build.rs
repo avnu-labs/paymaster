@@ -155,7 +155,9 @@ impl From<DeployAndInvokeTransaction> for BuildTransactionResponse {
 pub struct ApplyActionTransaction {
     pub parameters: ExecutionParameters,
     pub fee: FeeEstimate,
-    pub fee_action: FeeAction,
+    /// Omitted when the sponsor covers every fee: the proof must then not include a fee withdrawal
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_action: Option<FeeAction>,
 }
 
 impl From<ApplyActionTransaction> for BuildTransactionResponse {
@@ -170,7 +172,9 @@ pub struct InvokeAndApplyActionTransaction {
     pub typed_data: TypedData,
     pub parameters: ExecutionParameters,
     pub fee: FeeEstimate,
-    pub fee_action: FeeAction,
+    /// Omitted when the sponsor covers every fee: the proof must then not include a fee withdrawal
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_action: Option<FeeAction>,
 }
 
 impl From<InvokeAndApplyActionTransaction> for BuildTransactionResponse {
@@ -243,7 +247,7 @@ pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: Build
     }
 }
 
-async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
+async fn build_apply_action(ctx: &RequestContext<'_>, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
     let (pool_address, invoke) = match &request.transaction {
         TransactionParameters::ApplyAction { apply_action } => (apply_action.pool_address, None),
         TransactionParameters::InvokeAndApplyAction { invoke, apply_action } => (apply_action.pool_address, Some(invoke.clone())),
@@ -261,6 +265,13 @@ async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> 
         )));
     }
 
+    // The API key was already validated by check_is_allowed_fee_mode; this reads its permissions
+    let sponsor_pool_fee = if request.parameters.fee_mode().is_sponsored() {
+        ctx.validate_api_key().await?.sponsor_pool_fee
+    } else {
+        false
+    };
+
     let parameters = request.parameters.clone();
 
     let user_calls = invoke.map(|inv| PrivateInvokeUserCalls {
@@ -274,6 +285,7 @@ async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> 
         pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
         privacy_gas_overhead: ctx.configuration.privacy_gas_overhead,
         user_calls,
+        sponsor_pool_fee,
     };
 
     let estimated = transaction.estimate(&ctx.execution).await?;
@@ -283,13 +295,13 @@ async fn build_apply_action(ctx: &Context, request: BuildTransactionRequest) -> 
             typed_data,
             parameters,
             fee: estimated.fee_estimate.into(),
-            fee_action: estimated.fee_action.into(),
+            fee_action: estimated.fee_action.map(Into::into),
         }
         .into()),
         None => Ok(ApplyActionTransaction {
             parameters,
             fee: estimated.fee_estimate.into(),
-            fee_action: estimated.fee_action.into(),
+            fee_action: estimated.fee_action.map(Into::into),
         }
         .into()),
     }

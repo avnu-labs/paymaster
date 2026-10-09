@@ -324,6 +324,9 @@ pub struct PrivateTransaction {
     /// L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.)
     pub privacy_gas_overhead: u64,
     pub user_calls: Option<PrivateInvokeUserCalls>,
+    /// Whether the sponsor also covers the pool fee. Only meaningful in a sponsored fee mode, and must
+    /// only be set from an authenticated API key that has been granted this permission.
+    pub sponsor_pool_fee: bool,
 }
 
 /// Estimated private transaction with fee details and the fee action the user must approve.
@@ -331,7 +334,8 @@ pub struct PrivateTransaction {
 pub struct EstimatedPrivateTransaction {
     pub parameters: ExecutionParameters,
     pub fee_estimate: FeeEstimate,
-    pub fee_action: FeeAction,
+    /// Withdrawal the user must add to their proof, or `None` when the sponsor covers every fee
+    pub fee_action: Option<FeeAction>,
     pub typed_data: Option<TypedData>,
 }
 
@@ -418,6 +422,18 @@ impl PrivateTransaction {
             suggested_max_fee_in_gas_token
         };
 
+        // When the sponsor covers both gas and the pool fee, the user pays nothing and must not
+        // add a fee withdrawal to their proof.
+        let fee_action = if self.parameters.fee_mode().is_sponsored() && self.sponsor_pool_fee {
+            None
+        } else {
+            Some(FeeAction::Withdraw {
+                recipient: self.forwarder,
+                token: gas_token,
+                amount: fee_action_amount,
+            })
+        };
+
         Ok(EstimatedPrivateTransaction {
             parameters: self.parameters,
             fee_estimate: FeeEstimate {
@@ -427,11 +443,7 @@ impl PrivateTransaction {
                 suggested_max_fee_in_strk,
                 suggested_max_fee_in_gas_token,
             },
-            fee_action: FeeAction::Withdraw {
-                recipient: self.forwarder,
-                token: gas_token,
-                amount: fee_action_amount,
-            },
+            fee_action,
             typed_data,
         })
     }

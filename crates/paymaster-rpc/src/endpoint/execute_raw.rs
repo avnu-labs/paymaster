@@ -70,6 +70,7 @@ pub async fn execute_direct_endpoint(ctx: &RequestContext<'_>, request: ExecuteD
         transaction: request.transaction.into(),
         privacy_pool: Felt::ZERO,
         privacy_pool_fee_amount: 0,
+        sponsor_pool_fee: false,
     };
 
     let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
