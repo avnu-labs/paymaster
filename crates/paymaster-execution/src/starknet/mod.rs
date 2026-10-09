@@ -33,6 +33,9 @@ pub struct Client {
 
     // Cache account overhead
     cache_overhead: Cache<Felt, ValidationGasOverhead>,
+
+    // Cache privacy pool fee for 30 seconds
+    cache_privacy_pool_fee: Cache<Felt, SyncValue<u128>>,
 }
 
 impl Deref for Client {
@@ -54,6 +57,7 @@ impl Client {
             cache_account_version: ExpirableCache::new(1024),
             cache_class_version: Cache::new(128),
             cache_overhead: Cache::new(1024),
+            cache_privacy_pool_fee: Cache::new(8),
         }
     }
 
@@ -135,5 +139,18 @@ impl Client {
             .await?;
 
         Ok(tip)
+    }
+
+    /// Resolve the fee charged by the privacy [`pool`]. This function relies on a cache refreshed in the background
+    /// once older than 30s, so calls only wait for an external call when the fee has not been read for a minute
+    pub async fn resolve_privacy_pool_fee(&self, pool: Felt) -> Result<u128, Error> {
+        let client = self.inner.clone();
+        let fee = self
+            .cache_privacy_pool_fee
+            .get_with(pool, || SyncValue::new(Duration::from_secs(30)))
+            .read_and_revalidate(|| Box::pin(async move { client.fetch_privacy_pool_fee(pool).await }))
+            .await?;
+
+        Ok(fee)
     }
 }

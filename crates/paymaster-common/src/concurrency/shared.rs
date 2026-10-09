@@ -1,19 +1,37 @@
+use std::fmt::Display;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures_core::future::BoxFuture;
 use tokio::sync::RwLock;
+use tracing::warn;
 
 use crate::cache::Expirable;
 
+/// Releases the refresh flag of a [`SyncValue`] once the refresh is over, even if it panicked
+struct RefreshGuard(Arc<AtomicBool>);
+
+impl Drop for RefreshGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// A SyncValue is a value that can be concurrently read and refreshed if it has expired.
 #[derive(Clone)]
-pub struct SyncValue<T>(Arc<RwLock<Expirable<T>>>);
+pub struct SyncValue<T> {
+    value: Arc<RwLock<Expirable<T>>>,
+    refreshing: Arc<AtomicBool>,
+}
 
 impl<T: 'static + Default + Clone + Send> SyncValue<T> {
     /// Initializes the value with an empty [`Expirable`], which is immediately marked as stale and expired.
     pub fn new(validity: Duration) -> Self {
-        Self(Arc::new(RwLock::new(Expirable::empty(validity))))
+        Self {
+            value: Arc::new(RwLock::new(Expirable::empty(validity))),
+            refreshing: Arc::default(),
+        }
     }
 
     /// Reads the stored value if it's still fresh (i.e., not stale).
@@ -24,14 +42,14 @@ impl<T: 'static + Default + Clone + Send> SyncValue<T> {
     ///   - and the value is only stale (not expired), returns the stale value.
     ///   - and the value is expired, returns the error.
     pub async fn read_or_refresh<E>(&self, fetch_value: impl FnOnce() -> BoxFuture<'static, Result<T, E>>) -> Result<T, E> {
-        let read_lock = self.0.read().await;
+        let read_lock = self.value.read().await;
         if !read_lock.is_stale() {
             return Ok(read_lock.clone().take());
         }
 
         drop(read_lock); // Upgrade to write lock
 
-        let mut write_lock = self.0.write().await;
+        let mut write_lock = self.value.write().await;
         if !write_lock.is_stale() {
             return Ok(write_lock.clone().take());
         }
@@ -51,6 +69,41 @@ impl<T: 'static + Default + Clone + Send> SyncValue<T> {
         }
     }
 
+    /// Reads the stored value without waiting for a refresh (stale-while-revalidate).
+    ///
+    /// - If the value is fresh, returns it.
+    /// - If the value is stale but not expired, returns it and refreshes it in the background.
+    /// - If the value is expired, refreshes it inline like [`Self::read_or_refresh`].
+    pub async fn read_and_revalidate<E>(&self, fetch_value: impl FnOnce() -> BoxFuture<'static, Result<T, E>>) -> Result<T, E>
+    where
+        T: Sync,
+        E: 'static + Display + Send,
+    {
+        let current = self.value.read().await.clone();
+        if !current.is_stale() {
+            return Ok(current.take());
+        }
+
+        if current.is_expired() {
+            return self.read_or_refresh(fetch_value).await;
+        }
+
+        if !self.refreshing.swap(true, Ordering::AcqRel) {
+            let guard = RefreshGuard(self.refreshing.clone());
+            let value = self.value.clone();
+            let fetch = fetch_value();
+            tokio::spawn(async move {
+                let _guard = guard;
+                match fetch.await {
+                    Ok(fetched) => value.write().await.refresh_with(fetched),
+                    Err(e) => warn!(error = %e, "background refresh failed"),
+                }
+            });
+        }
+
+        Ok(current.take())
+    }
+
     /// Reads the stored value if it's still fresh (i.e., not stale).
     /// If the value is stale, attempts to refresh it using the provided asynchronous closure.
     ///
@@ -65,14 +118,14 @@ impl<T: 'static + Default + Clone + Send> SyncValue<T> {
     ///     - and the current value is not expired, returns the stale value.
     ///     - and the value is expired, returns the error.
     pub async fn read_or_refresh_with_ttl<E>(&self, fetch_value: impl FnOnce() -> BoxFuture<'static, Result<(T, u64), E>>) -> Result<T, E> {
-        let read_lock = self.0.read().await;
+        let read_lock = self.value.read().await;
         if !read_lock.is_stale() {
             return Ok(read_lock.clone().take());
         }
 
         drop(read_lock); // Upgrade to write lock
 
-        let mut write_lock = self.0.write().await;
+        let mut write_lock = self.value.write().await;
         if !write_lock.is_stale() {
             return Ok(write_lock.clone().take());
         }
@@ -116,5 +169,19 @@ mod tests {
 
         let result = sync.read_or_refresh(|| Box::pin(async { Ok::<i32, ()>(84) })).await;
         assert_eq!(result, Ok(42))
+    }
+
+    #[tokio::test]
+    async fn read_stale_value_and_refresh_it_in_background() {
+        let sync = SyncValue::<i32>::new(Duration::from_millis(200));
+        let _ = sync.read_or_refresh(|| Box::pin(async { Ok::<i32, ()>(42) })).await;
+        tokio::time::sleep(Duration::from_millis(250)).await;
+
+        let result = sync.read_and_revalidate(|| Box::pin(async { Ok::<i32, String>(84) })).await;
+        assert_eq!(result, Ok(42));
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let result = sync.read_and_revalidate(|| Box::pin(async { Ok::<i32, String>(126) })).await;
+        assert_eq!(result, Ok(84))
     }
 }

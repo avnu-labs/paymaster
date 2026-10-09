@@ -4,8 +4,7 @@ mod execution;
 
 use std::collections::HashSet;
 
-use ::starknet::core::types::{Felt, FunctionCall, InvokeTransactionResult, NonZeroFelt};
-use ::starknet::macros::selector;
+use ::starknet::core::types::{Felt, InvokeTransactionResult, NonZeroFelt};
 pub use execution::*;
 
 pub mod diagnostics;
@@ -237,41 +236,6 @@ impl Client {
     pub fn get_relayer_manager(&self) -> &RelayerManager {
         &self.relayers
     }
-
-    /// Resolve the privacy pool fee to use for a private transaction.
-    ///
-    /// The forwarder approves the pool for `get_fee_amount()` read on-chain, so the relayer must
-    /// pre-transfer, and the user must repay, that same amount. The configured amount keeps two roles:
-    /// `0` disables pool fee handling, and it is the fallback when the pool cannot be read.
-    pub async fn resolve_privacy_pool_fee(&self, pool: Felt, configured: u128) -> u128 {
-        if configured == 0 {
-            return 0;
-        }
-        let call = FunctionCall {
-            contract_address: pool,
-            entry_point_selector: selector!("get_fee_amount"),
-            calldata: vec![],
-        };
-        let result = self.starknet.call(&call).await.map_err(|e| e.to_string());
-        resolve_pool_fee_from_call(result, configured)
-    }
-}
-
-/// Parse a `get_fee_amount()` result, falling back to the configured fee when it can't be used.
-fn resolve_pool_fee_from_call(result: Result<Vec<Felt>, String>, configured: u128) -> u128 {
-    match result {
-        Ok(values) => match values.first().map(|fee| u128::try_from(*fee)) {
-            Some(Ok(fee)) => fee,
-            _ => {
-                tracing::warn!(configured, "Unexpected get_fee_amount result, using configured pool fee");
-                configured
-            },
-        },
-        Err(error) => {
-            tracing::warn!(configured, %error, "Could not read the pool fee, using configured pool fee");
-            configured
-        },
-    }
 }
 
 #[cfg(test)]
@@ -308,35 +272,5 @@ mod tests {
         let result = client.apply_provider_fee_multiplier(value);
 
         assert_eq!(result, Felt::from(3350));
-    }
-
-    mod resolve_pool_fee {
-        use starknet::core::types::Felt;
-
-        use crate::resolve_pool_fee_from_call;
-
-        const CONFIGURED: u128 = 6_000_000_000_000_000_000;
-
-        #[test]
-        fn should_use_the_fee_read_from_the_pool() {
-            let live = 4_000_000_000_000_000_000u128;
-            assert_eq!(resolve_pool_fee_from_call(Ok(vec![Felt::from(live)]), CONFIGURED), live);
-        }
-
-        #[test]
-        fn should_fall_back_to_configuration_when_the_call_fails() {
-            assert_eq!(resolve_pool_fee_from_call(Err("rpc down".to_string()), CONFIGURED), CONFIGURED);
-        }
-
-        #[test]
-        fn should_fall_back_to_configuration_on_an_empty_result() {
-            assert_eq!(resolve_pool_fee_from_call(Ok(vec![]), CONFIGURED), CONFIGURED);
-        }
-
-        #[test]
-        fn should_fall_back_to_configuration_when_the_value_does_not_fit_u128() {
-            let too_big = Felt::from(u128::MAX) + Felt::ONE;
-            assert_eq!(resolve_pool_fee_from_call(Ok(vec![too_big]), CONFIGURED), CONFIGURED);
-        }
     }
 }
