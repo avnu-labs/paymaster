@@ -65,9 +65,6 @@ pub struct Configuration {
 pub struct PrivacyConfiguration {
     #[serde(default)]
     pub pool: Felt,
-    /// Pool's collect_fee cost in STRK (decimal string, e.g. "1000000000000000")
-    #[serde(default)]
-    pub pool_fee_amount: Option<String>,
     /// L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.)
     /// Used at build time to estimate fees before the proof is available.
     #[serde(default)]

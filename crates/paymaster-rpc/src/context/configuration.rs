@@ -19,7 +19,6 @@ pub struct Configuration {
     pub supported_tokens: HashSet<Felt>,
 
     pub privacy_pool: Felt,
-    pub privacy_pool_fee_amount: u128,
     pub privacy_gas_overhead: u64,
 
     pub max_fee_multiplier: f32,

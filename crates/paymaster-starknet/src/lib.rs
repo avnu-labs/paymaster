@@ -267,6 +267,19 @@ impl Client {
         result?.first().cloned().ok_or(Error::ContractNotFound)
     }
 
+    /// Call `get_fee_amount()` on the given privacy `pool`
+    #[instrument(name = "fetch_privacy_pool_fee", skip(self))]
+    pub async fn fetch_privacy_pool_fee(&self, pool: Felt) -> Result<u128, Error> {
+        let call = FunctionCall {
+            contract_address: pool,
+            entry_point_selector: selector!("get_fee_amount"),
+            calldata: vec![],
+        };
+
+        let fee = self.call(&call).await?.first().copied().ok_or(Error::ContractNotFound)?;
+        math::felt_to_u128(fee)
+    }
+
     /// Fetch the nonce of the given `user`
     #[instrument(name = "fetch_nonce", skip(self))]
     pub async fn fetch_nonce(&self, user: ContractAddress) -> Result<Felt, Error> {
