@@ -16,6 +16,9 @@ struct ApiKeyValidationResponse {
     is_valid: bool,
     sponsor_metadata: Vec<Felt>,
     validity_duration: u64,
+    /// Optional: allow this key to have the sponsor pay the pool fee of private transactions (defaults to false)
+    #[serde(default)]
+    allow_pool_fee_sponsoring: bool,
 }
 
 #[derive(Clone)]
@@ -62,6 +65,7 @@ impl WebhookSponsoring {
                             AuthenticatedApiKey {
                                 is_valid: response.is_valid,
                                 sponsor_metadata: response.sponsor_metadata,
+                                allow_pool_fee_sponsoring: response.allow_pool_fee_sponsoring,
                             },
                             response.validity_duration,
                         ))
@@ -97,5 +101,26 @@ impl WebhookSponsoring {
         }
 
         serde_json::from_str::<ApiKeyValidationResponse>(&text).map_err(|e| Error::Format(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ApiKeyValidationResponse;
+
+    #[test]
+    fn should_default_pool_fee_sponsoring_permission_to_false() {
+        let response: ApiKeyValidationResponse = serde_json::from_str(r#"{"is_valid": true, "sponsor_metadata": [], "validity_duration": 60}"#).unwrap();
+
+        assert!(response.is_valid);
+        assert!(!response.allow_pool_fee_sponsoring);
+    }
+
+    #[test]
+    fn should_read_pool_fee_sponsoring_permission() {
+        let response: ApiKeyValidationResponse =
+            serde_json::from_str(r#"{"is_valid": true, "sponsor_metadata": [], "validity_duration": 60, "allow_pool_fee_sponsoring": true}"#).unwrap();
+
+        assert!(response.allow_pool_fee_sponsoring);
     }
 }

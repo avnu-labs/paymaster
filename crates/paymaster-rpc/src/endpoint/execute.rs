@@ -6,7 +6,7 @@ use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::{Call, Felt, TypedData};
 
 use crate::endpoint::common::{DeploymentParameters, ExecutionParameters};
-use crate::endpoint::validation::check_service_is_available;
+use crate::endpoint::validation::{authorize_fee_mode, check_fee_mode_matches_transaction, check_service_is_available};
 use crate::endpoint::RequestContext;
 use crate::Error;
 
@@ -138,9 +138,8 @@ pub struct ExecuteResponse {
 pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest) -> Result<ExecuteResponse, Error> {
     check_service_is_available(ctx).await?;
 
-    if request.parameters.fee_mode().is_sponsored_private() && !request.transaction.is_private() {
-        return Err(Error::SponsoredPrivateRequiresPrivacy);
-    }
+    check_fee_mode_matches_transaction(&request.parameters, request.transaction.is_private())?;
+    let authenticated_api_key = authorize_fee_mode(ctx, &request.parameters).await?;
 
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;
@@ -156,13 +155,13 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
 
     ctx.transaction_filter.filter(&transaction.transaction)?;
 
-    let estimated_transaction = if transaction.parameters.fee_mode().is_sponsored() {
-        let authenticated_api_key = ctx.validate_api_key().await?;
-        transaction
-            .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
-            .await?
-    } else {
-        transaction.estimate_transaction(&ctx.execution).await?
+    let estimated_transaction = match authenticated_api_key {
+        Some(authenticated_api_key) => {
+            transaction
+                .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
+                .await?
+        },
+        None => transaction.estimate_transaction(&ctx.execution).await?,
     };
 
     let result = estimated_transaction.execute(&ctx.execution).await?;

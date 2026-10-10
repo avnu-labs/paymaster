@@ -105,6 +105,18 @@ pub enum Error {
     #[error("sponsored_private mode requires a private transaction")]
     SponsoredPrivateRequiresPrivacy,
 
+    #[error("pool_fee requires a private transaction")]
+    PoolFeeRequiresPrivacy,
+
+    #[error("pool_fee is required for private transactions in sponsored mode")]
+    PoolFeeRequired,
+
+    #[error("pool fee sponsoring is not allowed for this API key")]
+    PoolFeeSponsoringNotAllowed,
+
+    #[error("unexpected fee payment in private transaction calldata: the pool fee is paid by the sponsor")]
+    UnexpectedFeeTransferTo,
+
     #[error("max L2 gas amount exceeded: {0}")]
     MaxL2GasAmountExceeded(String),
 
@@ -141,6 +153,7 @@ impl From<PaymasterExecutionError> for Error {
         match value {
             PaymasterExecutionError::PrivacyRequiresSponsoring => Self::PrivacyRequiresSponsoring,
             PaymasterExecutionError::MissingFeeTransferTo => Self::MissingFeeTransferTo,
+            PaymasterExecutionError::UnexpectedFeeTransferTo => Self::UnexpectedFeeTransferTo,
             PaymasterExecutionError::CalldataParsing(_) => Self::CalldataParsing,
             PaymasterExecutionError::MaxAmountTooLow(_) => Self::MaxAmountTooLow,
             PaymasterExecutionError::PoolFeeTooLow(_) => Self::PoolFeeTooLow,
@@ -172,6 +185,10 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::PoolFeeTooLow => ErrorObject::borrowed(167, "An error occurred (POOL_FEE_TOO_LOW)", None),
             Error::SponsoredPrivateRequiresPrivacy => ErrorObject::borrowed(168, "An error occurred (SPONSORED_PRIVATE_REQUIRES_PRIVACY)", None),
             Error::MaxL2GasAmountExceeded(msg) => ErrorObject::owned(169, "An error occurred (MAX_L2_GAS_AMOUNT_EXCEEDED)", Some(msg)),
+            Error::PoolFeeRequiresPrivacy => ErrorObject::borrowed(170, "An error occurred (POOL_FEE_REQUIRES_PRIVACY)", None),
+            Error::PoolFeeRequired => ErrorObject::borrowed(171, "An error occurred (POOL_FEE_REQUIRED)", None),
+            Error::PoolFeeSponsoringNotAllowed => ErrorObject::borrowed(172, "An error occurred (POOL_FEE_SPONSORING_NOT_ALLOWED)", None),
+            Error::UnexpectedFeeTransferTo => ErrorObject::borrowed(173, "An error occurred (UNEXPECTED_FEE_TRANSFER_TO)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),

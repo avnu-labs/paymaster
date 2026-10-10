@@ -7,6 +7,7 @@ use crate::{AuthenticatedApiKey, Error, SelfConfiguration};
 pub struct SelfSponsoring {
     api_key: String,
     sponsor_metadata: Vec<Felt>,
+    allow_pool_fee_sponsoring: bool,
 }
 
 impl SelfSponsoring {
@@ -17,12 +18,17 @@ impl SelfSponsoring {
         Ok(Self {
             api_key: configuration.api_key,
             sponsor_metadata: configuration.sponsor_metadata,
+            allow_pool_fee_sponsoring: configuration.allow_pool_fee_sponsoring,
         })
     }
 
     pub fn validate(&self, key: &str) -> AuthenticatedApiKey {
         if key == self.api_key {
-            AuthenticatedApiKey::valid(self.sponsor_metadata.clone())
+            AuthenticatedApiKey {
+                is_valid: true,
+                sponsor_metadata: self.sponsor_metadata.clone(),
+                allow_pool_fee_sponsoring: self.allow_pool_fee_sponsoring,
+            }
         } else {
             AuthenticatedApiKey::invalid()
         }
@@ -46,6 +52,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![Felt::ZERO],
+                allow_pool_fee_sponsoring: false,
             };
 
             // When
@@ -70,6 +77,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![],
+                allow_pool_fee_sponsoring: false,
             };
             let auth = SelfSponsoring::new(config).unwrap();
 
@@ -79,6 +87,33 @@ mod tests {
             // Then
             assert!(status.is_valid);
             assert_eq!(&status.sponsor_metadata, &auth.sponsor_metadata);
+            assert!(!status.allow_pool_fee_sponsoring);
+        }
+
+        #[test]
+        fn should_propagate_pool_fee_sponsoring_permission() {
+            // Given
+            let key = "paymaster_123456";
+            let config = SelfConfiguration {
+                api_key: key.to_string(),
+                sponsor_metadata: vec![],
+                allow_pool_fee_sponsoring: true,
+            };
+            let auth = SelfSponsoring::new(config).unwrap();
+
+            // When
+            let status = auth.validate("paymaster_123456");
+
+            // Then
+            assert!(status.is_valid);
+            assert!(status.allow_pool_fee_sponsoring);
+        }
+
+        #[test]
+        fn should_default_pool_fee_sponsoring_permission_to_false() {
+            let config: SelfConfiguration = serde_json::from_str(r#"{"api_key": "paymaster_1", "sponsor_metadata": []}"#).unwrap();
+
+            assert!(!config.allow_pool_fee_sponsoring);
         }
 
         #[test]
@@ -88,6 +123,7 @@ mod tests {
             let config = SelfConfiguration {
                 api_key: key.to_string(),
                 sponsor_metadata: vec![],
+                allow_pool_fee_sponsoring: false,
             };
             let auth = SelfSponsoring::new(config).unwrap();
 

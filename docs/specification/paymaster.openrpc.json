@@ -136,6 +136,18 @@
         },
         {
           "$ref": "#/components/errors/PRIVACY_POOL_NOT_WHITELISTED"
+        },
+        {
+          "$ref": "#/components/errors/SPONSORED_PRIVATE_REQUIRES_PRIVACY"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_REQUIRES_PRIVACY"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_REQUIRED"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_SPONSORING_NOT_ALLOWED"
         }
       ]
     },
@@ -212,6 +224,24 @@
         },
         {
           "$ref": "#/components/errors/CALLDATA_PARSING"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_TOO_LOW"
+        },
+        {
+          "$ref": "#/components/errors/SPONSORED_PRIVATE_REQUIRES_PRIVACY"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_REQUIRES_PRIVACY"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_REQUIRED"
+        },
+        {
+          "$ref": "#/components/errors/POOL_FEE_SPONSORING_NOT_ALLOWED"
+        },
+        {
+          "$ref": "#/components/errors/UNEXPECTED_FEE_TRANSFER_TO"
         }
       ]
     }
@@ -562,23 +592,35 @@
       },
       "PAYMASTER_FEE_MODE": {
         "title": "Paymaster fee mode",
-        "description": "Specify how the transaction should be paid. Either by the user specifying a gas token or through sponsorship",
+        "description": "Specify who pays the fees of the transaction. mode says who pays the gas fee; on private transactions, pool_fee says who pays the privacy pool fee",
         "oneOf": [
           {
-            "title": "Sponsor transaction",
-            "description": "Specify that the transaction should be sponsored. This argument does not guaranteed sponsorship and will depend on the paymaster provider",
+            "title": "Sponsored transaction",
+            "description": "The sponsor pays the gas fee. On private transactions (apply_action, invoke_and_apply_action) pool_fee is required and says who pays the privacy pool fee; on other transaction types it must be omitted. This argument does not guarantee sponsorship and will depend on the paymaster provider",
             "required": [
               "mode"
             ],
             "properties": {
               "mode": {
                 "const": ["sponsored"]
+              },
+              "pool_fee": {
+                "title": "Pool fee",
+                "description": "Who pays the privacy pool fee. Required on private transaction types, must be omitted otherwise",
+                "$ref": "#/components/schemas/POOL_FEE"
+              },
+              "tip": {
+                "title": "Tip priority",
+                "description": "Optional tip priority for the transaction",
+                "type": "string",
+                "enum": ["slow", "normal", "fast"]
               }
             }
           },
           {
-            "title": "Sponsored private transaction",
-            "description": "Sponsored fee mode for private transactions where the relayer pays gas and the user chooses the pool fee token. Only valid for apply_action and invoke_and_apply_action transaction types",
+            "title": "Sponsored private transaction (deprecated)",
+            "description": "Deprecated spelling of the sponsored mode with pool_fee: { paid_by: \"user\", token: pool_fee_token }, kept for backward compatibility. Use sponsored with pool_fee instead",
+            "deprecated": true,
             "required": [
               "mode",
               "pool_fee_token"
@@ -596,7 +638,7 @@
                 "title": "Tip priority",
                 "description": "Optional tip priority for the transaction",
                 "type": "string",
-                "enum": ["low", "normal", "high"]
+                "enum": ["slow", "normal", "fast"]
               }
             }
           },
@@ -613,6 +655,44 @@
               },
               "gas_token": {
                 "$ref": "#/components/schemas/FELT"
+              }
+            }
+          }
+        ]
+      },
+      "POOL_FEE": {
+        "title": "Pool fee",
+        "description": "Who pays the privacy pool fee of a private transaction. Tagged by paid_by",
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "Pool fee paid by the user",
+            "description": "The user pays the pool fee from their private balance, in the given token. buildTransaction returns a withdraw fee action the wallet must add to the proof",
+            "required": [
+              "paid_by",
+              "token"
+            ],
+            "properties": {
+              "paid_by": {
+                "const": "user"
+              },
+              "token": {
+                "title": "Pool fee token",
+                "description": "The token address to pay the privacy pool fee in",
+                "$ref": "#/components/schemas/FELT"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "Pool fee paid by the sponsor",
+            "description": "The sponsor pays the pool fee. buildTransaction returns a fee action of type none and the proof must not contain a fee withdrawal. Only for API keys allowed to sponsor the pool fee",
+            "required": [
+              "paid_by"
+            ],
+            "properties": {
+              "paid_by": {
+                "const": "sponsor"
               }
             }
           }
@@ -703,7 +783,7 @@
               },
               "fee_action": {
                 "title": "Fee action",
-                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "description": "What the user must include in the privacy SDK proof to pay the fees: a withdraw, or none when the sponsor pays the pool fee",
                 "$ref": "#/components/schemas/FEE_ACTION"
               }
             }
@@ -739,7 +819,7 @@
               },
               "fee_action": {
                 "title": "Fee action",
-                "description": "The fee payment action that the user must include as a Withdraw in the privacy SDK proof",
+                "description": "What the user must include in the privacy SDK proof to pay the fees: a withdraw, or none when the sponsor pays the pool fee",
                 "$ref": "#/components/schemas/FEE_ACTION"
               }
             }
@@ -748,8 +828,22 @@
       },
       "FEE_ACTION": {
         "title": "Fee action",
-        "description": "Describes the fee payment the user must include in the privacy proof. The type field indicates the mechanism (e.g. withdraw). The resulting TransferTo server action pays the forwarder, which forwards to the gas fees recipient",
+        "description": "Describes the fee payment the user must include in the privacy proof. The type field indicates the mechanism: withdraw (the resulting TransferTo server action pays the forwarder, which forwards to the gas fees recipient) or none (the sponsor pays the pool fee, nothing to include)",
         "oneOf": [
+          {
+            "type": "object",
+            "title": "No fee action",
+            "description": "Nothing to include in the proof: the sponsor pays the pool fee. The proof must not contain a fee withdrawal",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "title": "Action type",
+                "const": "none"
+              }
+            }
+          },
           {
             "type": "object",
             "title": "Withdraw fee action",
@@ -1538,6 +1632,26 @@
       "PRIVACY_PROOF_MISSING": {
         "code": 168,
         "message": "An error occurred (PRIVACY_PROOF_MISSING)"
+      },
+      "SPONSORED_PRIVATE_REQUIRES_PRIVACY": {
+        "code": 168,
+        "message": "An error occurred (SPONSORED_PRIVATE_REQUIRES_PRIVACY)"
+      },
+      "POOL_FEE_REQUIRES_PRIVACY": {
+        "code": 170,
+        "message": "An error occurred (POOL_FEE_REQUIRES_PRIVACY)"
+      },
+      "POOL_FEE_REQUIRED": {
+        "code": 171,
+        "message": "An error occurred (POOL_FEE_REQUIRED)"
+      },
+      "POOL_FEE_SPONSORING_NOT_ALLOWED": {
+        "code": 172,
+        "message": "An error occurred (POOL_FEE_SPONSORING_NOT_ALLOWED)"
+      },
+      "UNEXPECTED_FEE_TRANSFER_TO": {
+        "code": 173,
+        "message": "An error occurred (UNEXPECTED_FEE_TRANSFER_TO)"
       }
     }
   }
