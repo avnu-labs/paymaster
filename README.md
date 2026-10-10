@@ -24,7 +24,7 @@ SNIP-29 compliant Paymaster for Starknet.
 
 - **Gasless** - Let users pay gas in any ERC-20 (USDC, ETH, ...)
 - **Gasfree** - Sponsor user transactions with flexible logic (API key or webhook)
-- **Private transactions** - Privacy pool integration with sponsored, gasless, and sponsored-private fee modes ([docs](docs/private-transactions.md))
+- **Private transactions** - Privacy pool integration with gasless and sponsored fee modes, including sponsor-paid pool fees ([docs](docs/private-transactions.md))
 - **Fast setup** - Deploy a full Paymaster in 2 minutes with the CLI
 - **Auto-rebalancing** - Swap supported tokens into STRK and refill relayers automatically
 - **Scales effortlessly** - Vertical (more relayers) or horizontal (multi-instance with Redis)

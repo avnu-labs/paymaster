@@ -52,6 +52,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Setup coverage env
         uses: taiki-e/install-action@cargo-llvm-cov
+      # Avoid the anonymous Docker Hub pull rate limit on testcontainers images (skipped on forks without secrets)
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        continue-on-error: true
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_KEY }}
       - name: Generate code coverage
         run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
