@@ -10,7 +10,9 @@ use starknet::core::types::{Call, Felt, TypedData};
 
 use crate::context::Context;
 use crate::endpoint::common::{DeploymentParameters, ExecutionParameters};
-use crate::endpoint::validation::{check_is_allowed_fee_mode, check_is_supported_token, check_no_blacklisted_call, check_service_is_available};
+use crate::endpoint::validation::{
+    authorize_fee_mode, check_fee_mode_matches_transaction, check_is_supported_token, check_no_blacklisted_call, check_service_is_available,
+};
 use crate::endpoint::RequestContext;
 use crate::Error;
 
@@ -183,6 +185,7 @@ impl From<InvokeAndApplyActionTransaction> for BuildTransactionResponse {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FeeAction {
+    /// The user must add this withdrawal to their proof
     Withdraw {
         #[serde_as(as = "UfeHex")]
         recipient: Felt,
@@ -191,6 +194,8 @@ pub enum FeeAction {
         #[serde_as(as = "UfeHex")]
         amount: Felt,
     },
+    /// Nothing to add to the proof: the sponsor pays the pool fee
+    None,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -220,21 +225,19 @@ impl From<paymaster_execution::FeeAction> for FeeAction {
     fn from(value: paymaster_execution::FeeAction) -> Self {
         match value {
             paymaster_execution::FeeAction::Withdraw { recipient, token, amount } => Self::Withdraw { recipient, token, amount },
+            paymaster_execution::FeeAction::None => Self::None,
         }
     }
 }
 
 pub async fn build_transaction_endpoint(ctx: &RequestContext<'_>, request: BuildTransactionRequest) -> Result<BuildTransactionResponse, Error> {
     check_service_is_available(ctx).await?;
-    check_is_allowed_fee_mode(ctx, &request.parameters).await?;
+    check_fee_mode_matches_transaction(&request.parameters, request.transaction.is_private())?;
+    authorize_fee_mode(ctx, &request.parameters).await?;
 
     // Do preliminary checks
     check_no_blacklisted_call(&request.transaction, &HashSet::new())?;
     check_is_supported_token(&request.parameters, &ctx.configuration.supported_tokens)?;
-
-    if request.parameters.fee_mode().is_sponsored_private() && !request.transaction.is_private() {
-        return Err(Error::SponsoredPrivateRequiresPrivacy);
-    }
 
     match &request.transaction {
         TransactionParameters::Deploy { .. } if request.parameters.fee_mode().is_sponsored() => build_deploy_sponsored(ctx, request).await,

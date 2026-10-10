@@ -11,17 +11,45 @@ On-chain, the paymaster wraps everything into a single transaction via the forwa
 
 ## Fee Modes
 
-| Mode | Gas fee | Pool fee | Fee token |
-|---|---|---|---|
-| **`sponsored`** | Paid by relayer | Paid by user from private balance | Always **STRK** (hardcoded) |
-| **`sponsored_private`** (recommended) | Paid by relayer | Paid by user from private balance | User's choice via `fee_mode.pool_fee_token` |
-| **`default`** (gasless) | Paid by user from private balance | Paid by user from private balance | User's choice via `fee_mode.gas_token` |
+A private transaction has two fees: the **gas fee** of the Starknet transaction, and the **pool fee** charged by the privacy pool on every `apply_actions` call. `fee_mode` says who pays each one: `mode` is about the gas fee, `pool_fee` is about the pool fee.
 
-- In **`sponsored`** mode, the `fee_action` returned by `buildTransaction` always uses STRK as the token. The pool fee amount is a fixed server-side configuration (`privacy.pool_fee_amount`).
-- In **`sponsored_private`** mode, the relayer pays gas (same as sponsored), but the user chooses which token to pay the pool fee in via `pool_fee_token` (ETH, USDC, STRK…). The pool fee amount is converted from the base STRK amount to the chosen token using the price oracle. This mode is **only valid for private transaction types** (`apply_action` / `invoke_and_apply_action`) — using it with `deploy`, `invoke`, or `deploy_and_invoke` returns error **168** (`SPONSORED_PRIVATE_REQUIRES_PRIVACY`).
-- In **`default`** (gasless) mode, the user chooses the fee token (STRK, USDC, ETH…) and pays both gas + pool fee from their private balance in that token.
+| `fee_mode` | Gas fee | Pool fee | Fee token |
+|---|---|---|---|
+| `{ mode: "sponsored", pool_fee: { paid_by: "user", token } }` | Sponsor | User, from private balance | `pool_fee.token` (ETH, USDC, STRK…) |
+| `{ mode: "sponsored", pool_fee: { paid_by: "sponsor" } }` | Sponsor | Sponsor | None: the user pays nothing |
+| `{ mode: "default", gas_token }` (gasless) | User, from private balance | User, from private balance | `gas_token` |
+
+- **`pool_fee: { paid_by: "user", token }`**: the sponsor (relayer) pays gas and the user pays the pool fee from their private balance in the chosen token. `buildTransaction` returns a `fee_action` of type `withdraw` the wallet must add to the proof. The pool fee amount is a fixed server-side configuration (`privacy.pool_fee_amount`), converted from STRK to the chosen token using the price oracle.
+- **`pool_fee: { paid_by: "sponsor" }`**: the sponsor pays both gas and the pool fee. `buildTransaction` returns a `fee_action` of type `none` and the proof must not contain a fee withdrawal, so a user holding no shielded balance at all can transact (e.g. register with the pool). The API key must be allowed to sponsor the pool fee, see [Pool fee paid by the sponsor](#pool-fee-paid-by-the-sponsor).
+- **`default`** (gasless): the user chooses the fee token (STRK, USDC, ETH…) and pays both gas + pool fee from their private balance in that token.
+
+On private transaction types (`apply_action` / `invoke_and_apply_action`), `pool_fee` is **required** in `sponsored` mode: `{ mode: "sponsored" }` alone returns error **171** (`POOL_FEE_REQUIRED`). On any other transaction type there is no pool fee, so `pool_fee` must be omitted: sending it returns error **170** (`POOL_FEE_REQUIRES_PRIVACY`).
 
 All fee modes accept an optional `tip` priority: `slow`, `normal`, or `fast`.
+
+> **Deprecated:** `{ mode: "sponsored_private", pool_fee_token }` is the former spelling of `{ mode: "sponsored", pool_fee: { paid_by: "user", token } }`. It is still accepted, behaves as before, and is echoed back unchanged, so existing integrations keep working. New integrations should use `pool_fee`.
+
+### Pool fee paid by the sponsor
+
+With `pool_fee: { paid_by: "sponsor" }` the relayer pays gas and the pool fee, and the user pays nothing:
+
+- `buildTransaction` returns `fee_action: { type: "none" }`. The wallet must not add a fee withdrawal to the proof.
+- `executeTransaction` accepts proofs without a fee withdrawal. The forwarder is called with a zero gas amount: it still approves the pool fee pre-transferred by the relayer, but expects nothing from the user. A proof that contains a fee withdrawal to the forwarder anyway is rejected with error **173** (`UNEXPECTED_FEE_TRANSFER_TO`): the forwarder would not collect it.
+- This makes **relayed registration** possible: a proof containing only setup actions (set viewing key, open channels/subchannels) and no notes can be relayed for a user holding no shielded balance.
+- The `fee` estimate still reports gas plus the pool fee, so the sponsoring backend can see what each request costs.
+
+The sponsor bears the pool fee, so its backend must allow it for the API key. The permission is off by default:
+
+| Sponsoring mode | How to allow `pool_fee: { paid_by: "sponsor" }` |
+|---|---|
+| `webhook` | Return `"allow_pool_fee_sponsoring": true` in the API key validation response (optional, defaults to `false`) |
+| `self` | Set `"allow_pool_fee_sponsoring": true` in the self-sponsoring configuration (optional, defaults to `false`) |
+
+A key without the permission that requests `paid_by: "sponsor"` gets error **172** (`POOL_FEE_SPONSORING_NOT_ALLOWED`). It can still use `paid_by: "user"`.
+
+Billing the sponsor for the gas and pool fee it covers is the sponsoring backend's responsibility. In `self` sponsoring mode there is no backend to enforce a budget: every request authenticated with the configured key is sponsored, pool fee included. Only enable `allow_pool_fee_sponsoring` there for keys you fully control.
+
+> **Privacy note:** a transaction whose pool fee is paid by the sponsor has no public `pool → forwarder` fee withdrawal, which distinguishes it on-chain from transactions where the user pays the pool fee.
 
 ## Sponsored Private Transaction Flow
 
@@ -38,8 +66,9 @@ Two transaction types depending on whether user calls (e.g. approve) are needed:
     │  { type: "apply_action",      │                               │
     │    apply_action: { pool } }   │                               │
     │  fee_mode: { mode:            │                               │
-    │    "sponsored_private",       │                               │
-    │    pool_fee_token: ETH,       │                               │
+    │    "sponsored",               │                               │
+    │    pool_fee: { paid_by: user, │                               │
+    │      token: ETH },            │                               │
     │    tip: "normal" }            │                               │
     │──────────────────────────────>│                               │
     │                               │                               │
@@ -83,8 +112,9 @@ Two transaction types depending on whether user calls (e.g. approve) are needed:
     │      [approve] },             │                               │
     │    apply_action: { pool } }   │                               │
     │  fee_mode: { mode:            │                               │
-    │    "sponsored_private",       │                               │
-    │    pool_fee_token: ETH,       │                               │
+    │    "sponsored",               │                               │
+    │    pool_fee: { paid_by: user, │                               │
+    │      token: ETH },            │                               │
     │    tip: "normal" }            │                               │
     │──────────────────────────────>│                               │
     │                               │                               │
@@ -122,40 +152,39 @@ Two transaction types depending on whether user calls (e.g. approve) are needed:
     │<──────────────────────────────│                               │
 ```
 
-> **Note:** The `sponsored` mode (without `_private`) works identically but always uses STRK as the pool fee token. Replace `"sponsored_private"` with `"sponsored"` and remove `pool_fee_token` to use it.
+> **Note:** With `pool_fee: { paid_by: "sponsor" }` the flow is the same, except that `fee_action` is `{ type: "none" }` and the proof contains no fee withdrawal.
 
 ## Wallet Integration Guide
 
 ### 1. `buildTransaction`
 
-#### Sponsored mode (`sponsored`)
+#### Pool fee paid by the user
 
-The wallet calls `buildTransaction` with `fee_mode: { mode: "sponsored", tip }`. The sponsor (relayer) covers the gas fee. The user pays the **pool fee** from their private balance in **STRK**.
+The wallet calls `buildTransaction` with `fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: "<token_address>" }, tip }`. The sponsor (relayer) covers the gas fee. The user pays the **pool fee** from their private balance in the **chosen token** (ETH, USDC, STRK…). The paymaster converts the base pool fee amount to the chosen token via the price oracle.
 
-#### Sponsored Private mode (`sponsored_private`)
+#### Pool fee paid by the sponsor
 
-The wallet calls `buildTransaction` with `fee_mode: { mode: "sponsored_private", pool_fee_token: "<token_address>", tip }`. The sponsor (relayer) covers the gas fee. The user pays the **pool fee** from their private balance in the **chosen token** (ETH, USDC, STRK…). The paymaster converts the base pool fee amount to the chosen token via the price oracle.
+The wallet calls `buildTransaction` with `fee_mode: { mode: "sponsored", pool_fee: { paid_by: "sponsor" }, tip }`. The sponsor covers both the gas fee and the pool fee. `fee_action` is `{ type: "none" }` and the proof must not contain a fee withdrawal. The API key must be allowed to sponsor the pool fee (see [Pool fee paid by the sponsor](#pool-fee-paid-by-the-sponsor)).
 
-> **Important:** `sponsored_private` is only valid for private transaction types (`apply_action` / `invoke_and_apply_action`). Using it with `deploy`, `invoke`, or `deploy_and_invoke` returns error **168** (`SPONSORED_PRIVATE_REQUIRES_PRIVACY`).
+> **Important:** `pool_fee` is required on private transaction types (`apply_action` / `invoke_and_apply_action`) and must be omitted on `deploy`, `invoke`, or `deploy_and_invoke`. See [Fee Modes](#fee-modes) for the error codes.
 
 #### Response
 
 The response contains:
 
-- **`fee_action`**: a Withdraw action the wallet must include in the proof. In sponsored / sponsored_private mode, this covers only the pool fee (not gas).
-  - `fee_action.recipient` — the forwarder address
-  - `fee_action.token` — STRK for `sponsored`, user-chosen token for `sponsored_private`
-  - `fee_action.amount` — the pool fee amount (converted to the chosen token for `sponsored_private`)
+- **`fee_action`**: what the wallet must include in the proof to pay the fees, tagged by `type`:
+  - `{ type: "withdraw", recipient, token, amount }` when the user pays the pool fee. In sponsored mode this covers only the pool fee (not gas). `recipient` is the forwarder address, `token` is `pool_fee.token`, `amount` is the pool fee converted to that token.
+  - `{ type: "none" }` when the sponsor pays the pool fee: the wallet must not add a fee withdraw to the proof.
 - **`typed_data`** (only for `invoke_and_apply_action`): an `execute_from_outside` message wrapping the user calls (e.g. approve). The wallet must ask the user to sign it.
 
 > **Note:** If `fee_action.amount` is `0x0`, the pool fee is zero and the wallet can skip the fee withdraw in the proof.
 
 ### 2. Build the proof
 
-The wallet builds the proof using the privacy SDK. The `fee_action` returned by the paymaster must be added as the last withdraw in the proof's action list:
+The wallet builds the proof using the privacy SDK. A `fee_action` of type `withdraw` must be added as the last withdraw in the proof's action list:
 
 ```ts
-// sponsored — pool fee always in STRK
+// pool_fee: { paid_by: "user", token: STRK } — pool fee in STRK
 transfers.build().with(STRK, (t) =>
   t.deposit({ amount })
    .withdraw({
@@ -164,7 +193,7 @@ transfers.build().with(STRK, (t) =>
    })
 )
 
-// sponsored_private — pool fee in the chosen token (e.g. ETH)
+// pool_fee: { paid_by: "user", token: ETH } — pool fee in ETH
 transfers.build().with(ETH, (t) =>
   t.deposit({ amount })
    .withdraw({
@@ -178,7 +207,7 @@ transfers.build().with(ETH, (t) =>
 
 The wallet sends the proof + call to `executeTransaction`. For `invoke_and_apply_action`, the signed `typed_data` + `signature` must also be provided in the `invoke` field.
 
-The paymaster wraps everything into a single on-chain transaction via the forwarder's `execute_private_sponsored` entrypoint. The relayer pays gas, the forwarder collects the pool fee from the `TransferTo` action in the proof.
+The paymaster wraps everything into a single on-chain transaction via the forwarder's `execute_private_sponsored` entrypoint. The relayer pays gas, the forwarder collects the pool fee from the `TransferTo` action in the proof. When the sponsor pays the pool fee there is no `TransferTo` action and the forwarder collects nothing from the user.
 
 ## Code Snippets
 
@@ -195,7 +224,7 @@ const build = await paymaster.buildTransaction({
     },
     apply_action: { pool_address: POOL },
   },
-  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" } },
 });
 
 // 2. Generate proof: deposit + withdraw pool fee (STRK) from private balance
@@ -216,7 +245,7 @@ await paymaster.executeTransaction({
     invoke: { user_address: account.address, typed_data: build.typed_data, signature },
     apply_action: { apply_actions_call: call, proof: proof.data, proof_facts: proof.proofFacts },
   },
-  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" } },
 });
 ```
 
@@ -237,7 +266,7 @@ const build = await paymaster.buildTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: ETH, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: ETH }, tip: "normal" },
   },
 });
 
@@ -262,7 +291,7 @@ await paymaster.executeTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: ETH, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: ETH }, tip: "normal" },
   },
 });
 ```
@@ -276,7 +305,7 @@ const build = await paymaster.buildTransaction({
     type: "apply_action",
     apply_action: { pool_address: POOL },
   },
-  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" } },
 });
 
 // 2. Generate proof: withdraw to user + withdraw pool fee (STRK) from private balance
@@ -296,7 +325,7 @@ await paymaster.executeTransaction({
     type: "apply_action",
     apply_action: { apply_actions_call: call, proof: proof.data, proof_facts: proof.proofFacts },
   },
-  parameters: { version: "0x1", fee_mode: { mode: "sponsored", tip: "normal" } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" } },
 });
 ```
 
@@ -313,7 +342,7 @@ const build = await paymaster.buildTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: ETH, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: ETH }, tip: "normal" },
   },
 });
 
@@ -336,7 +365,7 @@ await paymaster.executeTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: ETH, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: ETH }, tip: "normal" },
   },
 });
 ```
@@ -361,7 +390,7 @@ const build = await paymaster.buildTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: STRK, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" },
   },
 });
 
@@ -388,8 +417,31 @@ await paymaster.executeTransaction({
   },
   parameters: {
     version: "0x1",
-    fee_mode: { mode: "sponsored_private", pool_fee_token: STRK, tip: "normal" },
+    fee_mode: { mode: "sponsored", pool_fee: { paid_by: "user", token: STRK }, tip: "normal" },
   },
+});
+```
+
+### Registration with the pool fee paid by the sponsor
+
+```ts
+// 1. Build — fee_action is { type: "none" } when the sponsor pays the pool fee
+const build = await paymaster.buildTransaction({
+  transaction: { type: "apply_action", apply_action: { pool_address: POOL } },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "sponsor" }, tip: "normal" } },
+});
+// build.fee_action.type === "none"
+
+// 2. Generate a proof with setup actions only (viewing key, channels), no notes and no fee withdraw
+const { call, proof } = await registration.execute({ provingBlockId });
+
+// 3. Execute — the relayer pays gas and the pool fee
+await paymaster.executeTransaction({
+  transaction: {
+    type: "apply_action",
+    apply_action: { apply_actions_call: call, proof: proof.data, proof_facts: proof.proofFacts },
+  },
+  parameters: { version: "0x1", fee_mode: { mode: "sponsored", pool_fee: { paid_by: "sponsor" }, tip: "normal" } },
 });
 ```
 
@@ -410,8 +462,10 @@ Private transaction support is configured under the `privacy` section of the ser
 | Field | Description |
 |---|---|
 | `pool` | Address of the privacy pool contract |
-| `pool_fee_amount` | Pool's `collect_fee` cost in STRK (decimal string). This is the base amount converted to the chosen token in `sponsored_private` mode |
+| `pool_fee_amount` | Pool's `collect_fee` cost in STRK (decimal string). This is the base amount converted to `pool_fee.token` when the user pays the pool fee |
 | `gas_overhead` | L2 gas overhead for privacy pool execution (proof verification, forwarder, etc.). Used at build time to estimate fees before the proof is available |
+
+Letting the sponsor pay the pool fee is allowed per API key through the `sponsoring` section: `allow_pool_fee_sponsoring` in the `self` configuration, or `allow_pool_fee_sponsoring` in the `webhook` validation response (see [Pool fee paid by the sponsor](#pool-fee-paid-by-the-sponsor)).
 
 ## See Also
 

@@ -11,6 +11,9 @@ pub enum Error {
     #[error("missing fee TransferTo action for an accepted recipient")]
     MissingFeeTransferTo,
 
+    #[error("unexpected fee TransferTo action: the pool fee is paid by the sponsor")]
+    UnexpectedFeeTransferTo,
+
     #[error("failed to parse ServerActions from calldata: {0}")]
     CalldataParsing(String),
 

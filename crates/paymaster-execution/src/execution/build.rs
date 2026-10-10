@@ -331,6 +331,7 @@ pub struct PrivateTransaction {
 pub struct EstimatedPrivateTransaction {
     pub parameters: ExecutionParameters,
     pub fee_estimate: FeeEstimate,
+    /// What the user must add to their proof to pay the fees
     pub fee_action: FeeAction,
     pub typed_data: Option<TypedData>,
 }
@@ -406,16 +407,25 @@ impl PrivateTransaction {
             None
         };
 
-        // In sponsored mode the relayer covers gas but the user still pays the pool fee. Reuse the
-        // overhead-aware amount computed above (no overhead when gas_token == STRK).
-        let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
-            if self.pool_fee_amount > 0 {
+        // When the sponsor pays the pool fee the user pays nothing and must not add a fee withdrawal to
+        // their proof. In sponsored mode the relayer covers gas but the user still pays the pool fee: reuse
+        // the overhead-aware amount computed above (no overhead when gas_token == STRK).
+        let fee_mode = self.parameters.fee_mode();
+        let fee_action = if fee_mode.is_pool_fee_sponsored() {
+            FeeAction::None
+        } else {
+            let amount = if !fee_mode.is_sponsored() {
+                suggested_max_fee_in_gas_token
+            } else if self.pool_fee_amount > 0 {
                 convert_strk_to_token(&token, pool_fee_with_overhead, true)?
             } else {
                 Felt::ZERO
+            };
+            FeeAction::Withdraw {
+                recipient: self.forwarder,
+                token: gas_token,
+                amount,
             }
-        } else {
-            suggested_max_fee_in_gas_token
         };
 
         Ok(EstimatedPrivateTransaction {
@@ -427,11 +437,7 @@ impl PrivateTransaction {
                 suggested_max_fee_in_strk,
                 suggested_max_fee_in_gas_token,
             },
-            fee_action: FeeAction::Withdraw {
-                recipient: self.forwarder,
-                token: gas_token,
-                amount: fee_action_amount,
-            },
+            fee_action,
             typed_data,
         })
     }
@@ -576,7 +582,10 @@ mod tests {
                 },
             },
             parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
+                fee_mode: FeeMode::Sponsored {
+                    pool_fee: None,
+                    tip: TipPriority::Normal,
+                },
                 time_bounds: None,
             },
         };

@@ -51,12 +51,16 @@ pub enum Error {
 pub struct AuthenticatedApiKey {
     pub is_valid: bool,
     pub sponsor_metadata: Vec<Felt>,
+    /// Whether the key may request `pool_fee: { paid_by: "sponsor" }`, where the sponsor also pays the
+    /// privacy pool fee of private transactions. Off by default: the sponsor bears the cost.
+    pub allow_pool_fee_sponsoring: bool,
 }
 impl AuthenticatedApiKey {
     pub fn valid(sponsor_metadata: Vec<Felt>) -> Self {
         Self {
             is_valid: true,
             sponsor_metadata,
+            allow_pool_fee_sponsoring: false,
         }
     }
 
@@ -64,6 +68,7 @@ impl AuthenticatedApiKey {
         Self {
             is_valid: false,
             sponsor_metadata: vec![],
+            allow_pool_fee_sponsoring: false,
         }
     }
 }
@@ -72,6 +77,10 @@ impl AuthenticatedApiKey {
 pub struct SelfConfiguration {
     pub api_key: String,
     pub sponsor_metadata: Vec<Felt>,
+    /// Allow the sponsor to also pay the pool fee of private transactions, i.e. requests with
+    /// `pool_fee: { paid_by: "sponsor" }` (defaults to false)
+    #[serde(default)]
+    pub allow_pool_fee_sponsoring: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
