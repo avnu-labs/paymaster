@@ -145,13 +145,19 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
     let forwarder = ctx.configuration.forwarder;
     let gas_tank_address = ctx.configuration.gas_tank.address;
 
+    let privacy_pool_fee_amount = if request.transaction.is_private() {
+        ctx.resolve_privacy_pool_fee().await?
+    } else {
+        0
+    };
+
     let transaction = ExecutableTransaction {
         forwarder,
         gas_tank_address,
         parameters: request.parameters.into(),
         transaction: request.transaction.try_into()?,
         privacy_pool: ctx.configuration.privacy_pool,
-        privacy_pool_fee_amount: ctx.configuration.privacy_pool_fee_amount,
+        privacy_pool_fee_amount,
     };
 
     ctx.transaction_filter.filter(&transaction.transaction)?;

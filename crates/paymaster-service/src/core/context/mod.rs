@@ -57,14 +57,6 @@ impl Into<paymaster_rpc::Configuration> for Context {
 
             supported_tokens: self.configuration.supported_tokens.clone(),
 
-            privacy_pool_fee_amount: self
-                .configuration
-                .privacy
-                .pool_fee_amount
-                .as_deref()
-                .and_then(|s| s.parse::<u128>().ok())
-                .unwrap_or(0),
-
             privacy_gas_overhead: self
                 .configuration
                 .privacy
