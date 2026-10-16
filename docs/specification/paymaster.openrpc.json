@@ -619,6 +619,7 @@
         ]
       },
       "PAYMASTER_FEE_ESTIMATE": {
+        "description": "Fee estimate of the transaction. For sponsored standard transactions (deploy, invoke, deploy_and_invoke), the transaction is not simulated at build time and every field is zero",
         "required": [
           "gas_token_price_in_strk",
           "estimated_fee_in_strk",

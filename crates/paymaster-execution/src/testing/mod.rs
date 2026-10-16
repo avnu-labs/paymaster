@@ -11,6 +11,7 @@ use paymaster_relayer::lock::{LockLayerConfiguration, RelayerLock};
 use paymaster_relayer::RelayersConfiguration;
 use paymaster_starknet::constants::Token;
 pub use paymaster_starknet::testing::TestEnvironment as StarknetTestEnvironment;
+use paymaster_starknet::ChainID;
 use starknet::core::types::Felt;
 
 use crate::{Client, Configuration};
@@ -33,6 +34,23 @@ impl MockPriceOracle for PriceOracle {
             price_in_strk: Felt::from(1e18 as u128),
             decimals: 18,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct UnavailablePriceOracle;
+
+#[async_trait]
+impl MockPriceOracle for UnavailablePriceOracle {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self
+    }
+
+    async fn fetch_token(&self, address: Felt) -> Result<TokenPrice, Error> {
+        Err(Error::InvalidPrice(address))
     }
 }
 
@@ -74,28 +92,7 @@ impl TestEnvironment {
         let starknet = StarknetTestEnvironment::new().await;
 
         Self {
-            configuration: Configuration {
-                starknet: starknet.configuration(),
-                price: paymaster_prices::PriceConfiguration {
-                    principal: PriceOracleConfiguration::mock::<PriceOracle>(),
-                    fallbacks: vec![],
-                },
-                supported_tokens: HashSet::from([Token::usdc(starknet.chain_id()).address]),
-                max_fee_multiplier: 3.0,
-                provider_fee_overhead: 0.1,
-
-                estimate_account: StarknetTestEnvironment::ACCOUNT_1,
-                gas_tank: StarknetTestEnvironment::ACCOUNT_1,
-
-                relayers: RelayersConfiguration {
-                    private_key: StarknetTestEnvironment::ACCOUNT_2.private_key,
-                    addresses: vec![StarknetTestEnvironment::ACCOUNT_2.address],
-
-                    min_relayer_balance: Felt::ZERO,
-                    lock: LockLayerConfiguration::mock_with_timeout::<CoordinationLayer>(Duration::from_secs(5)),
-                    rebalancing: paymaster_relayer::rebalancing::OptionalRebalancingConfiguration::initialize(None),
-                },
-            },
+            configuration: Self::configuration_with(starknet.configuration()),
 
             starknet,
         }
@@ -103,5 +100,46 @@ impl TestEnvironment {
 
     pub fn default_client(&self) -> Client {
         Client::new(&self.configuration)
+    }
+
+    /// Client whose Starknet endpoint is unreachable and whose price oracle always fails. Any
+    /// network access made through it returns an error.
+    pub fn offline_client() -> Client {
+        let mut configuration = Self::configuration_with(paymaster_starknet::Configuration {
+            chain_id: ChainID::Sepolia,
+            endpoint: "http://127.0.0.1:1".to_string(),
+            timeout: 1,
+            fallbacks: vec![],
+            max_l2_gas_amount: paymaster_starknet::default_max_l2_gas_amount(),
+        });
+        configuration.price.principal = PriceOracleConfiguration::mock::<UnavailablePriceOracle>();
+
+        Client::new(&configuration)
+    }
+
+    fn configuration_with(starknet: paymaster_starknet::Configuration) -> Configuration {
+        Configuration {
+            price: paymaster_prices::PriceConfiguration {
+                principal: PriceOracleConfiguration::mock::<PriceOracle>(),
+                fallbacks: vec![],
+            },
+            supported_tokens: HashSet::from([Token::usdc(&starknet.chain_id).address]),
+            max_fee_multiplier: 3.0,
+            provider_fee_overhead: 0.1,
+
+            estimate_account: StarknetTestEnvironment::ACCOUNT_1,
+            gas_tank: StarknetTestEnvironment::ACCOUNT_1,
+
+            relayers: RelayersConfiguration {
+                private_key: StarknetTestEnvironment::ACCOUNT_2.private_key,
+                addresses: vec![StarknetTestEnvironment::ACCOUNT_2.address],
+
+                min_relayer_balance: Felt::ZERO,
+                lock: LockLayerConfiguration::mock_with_timeout::<CoordinationLayer>(Duration::from_secs(5)),
+                rebalancing: paymaster_relayer::rebalancing::OptionalRebalancingConfiguration::initialize(None),
+            },
+
+            starknet,
+        }
     }
 }

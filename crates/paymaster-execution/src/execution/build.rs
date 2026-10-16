@@ -61,10 +61,29 @@ impl Transaction {
     /// suggested max fee. The former correspond to the actual value returned by Starknet while the latter corresponds
     /// to the fee that should be used to guarantee a valid execution.
     ///
+    /// Sponsored transactions are not simulated: the user pays no fee and the transaction is simulated again
+    /// at execution time, so the estimate would never be used.
+    ///
     /// The client's `diagnostic_client` is used to extract and log diagnostic information from simulation errors.
     pub async fn estimate(self, client: &Client) -> Result<EstimatedTransaction, Error> {
         self.check_parameters_valid()?;
 
+        let fee_estimate = if self.parameters.fee_mode().is_sponsored() {
+            FeeEstimate::sponsored()
+        } else {
+            self.estimate_fee(client).await?
+        };
+
+        Ok(EstimatedTransaction {
+            chain_id: *client.starknet.chain_id(),
+            forwarder: self.forwarder,
+            transaction: self.transaction,
+            parameters: self.parameters,
+            fee_estimate,
+        })
+    }
+
+    async fn estimate_fee(&self, client: &Client) -> Result<FeeEstimate, Error> {
         let transactions = self.build_transactions(client).await?;
         let token = client.price.fetch_token(self.parameters.gas_token()).await?;
 
@@ -86,19 +105,12 @@ impl Transaction {
         let suggested_max_fee_in_strk = self.compute_max_fee_in_strk(client, estimated_fee_in_strk).await?;
         let suggested_max_fee_in_gas_token = convert_strk_to_token(&token, suggested_max_fee_in_strk, true)?;
 
-        Ok(EstimatedTransaction {
-            chain_id: *client.starknet.chain_id(),
-            forwarder: self.forwarder,
-            transaction: self.transaction,
-            parameters: self.parameters,
-
-            fee_estimate: FeeEstimate {
-                gas_token_price_in_strk: token.price_in_strk,
-                estimated_fee_in_strk,
-                estimated_fee_in_gas_token,
-                suggested_max_fee_in_strk,
-                suggested_max_fee_in_gas_token,
-            },
+        Ok(FeeEstimate {
+            gas_token_price_in_strk: token.price_in_strk,
+            estimated_fee_in_strk,
+            estimated_fee_in_gas_token,
+            suggested_max_fee_in_strk,
+            suggested_max_fee_in_gas_token,
         })
     }
 
@@ -146,16 +158,10 @@ impl Transaction {
         }
     }
 
-    // Convert the transaction into a Starknet transaction type to perform the estimate
+    // Convert the transaction into a Starknet transaction type to perform the estimate. Only used for
+    // non-sponsored transactions, which always contain a gas token transfer to pay for the gas
     async fn build_transactions(&self, client: &Client) -> Result<Vec<BroadcastedTransaction>, Error> {
         Ok(match &self.transaction {
-            // A sponsored transaction only has a deployment without any invoke to pay gas token
-            TransactionParameters::Deploy { deployment } if self.parameters.fee_mode().is_sponsored() => {
-                let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
-
-                vec![deploy_tx]
-            },
-            // A non-sponsored deploy transaction also contains a gas token transfer to pay for the gas
             TransactionParameters::Deploy { deployment } => {
                 let deploy_tx = deployment.build_transaction(client, self.parameters.fee_mode().tip()).await?;
                 let tip = client.get_tip(self.parameters.tip()).await?;
@@ -190,23 +196,12 @@ impl Transaction {
     }
 
     fn build_invoke(&self, sender: Felt, nonce: Felt, tip: u64) -> BroadcastedTransaction {
-        let calls = if self.parameters.fee_mode().is_sponsored() {
-            self.build_sponsored_calls()
-        } else {
-            self.build_unsponsored_calls()
-        };
-
-        calls.as_transaction(sender, nonce, tip)
-    }
-
-    // Build the call for a sponsored transaction which means that we don't include the gas token transfer
-    pub fn build_sponsored_calls(&self) -> Calls {
-        self.transaction.calls()
+        self.build_unsponsored_calls().as_transaction(sender, nonce, tip)
     }
 
     // Build the call for an unsponsored transaction which means that we inject a transfer of the gas token
     // by the user to our forwarder
-    pub fn build_unsponsored_calls(&self) -> Calls {
+    fn build_unsponsored_calls(&self) -> Calls {
         let mut calls = self.transaction.calls();
         calls.push(TokenTransfer::new(self.parameters.gas_token(), self.forwarder, Felt::ONE).to_call());
 
@@ -450,6 +445,80 @@ mod tests {
     use crate::execution::{ExecutionParameters, FeeMode, TipPriority};
     use crate::testing::transaction::an_eth_transfer;
     use crate::testing::{StarknetTestEnvironment, TestEnvironment};
+
+    #[tokio::test]
+    async fn estimate_sponsored_invoke_does_not_simulate() {
+        // The offline client fails on any RPC or price call, so this only succeeds if nothing is simulated
+        let client = TestEnvironment::offline_client();
+
+        let transaction = Transaction {
+            forwarder: StarknetTestEnvironment::FORWARDER,
+            transaction: TransactionParameters::Invoke {
+                invoke: InvokeParameters {
+                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
+                    calls: Calls::new(vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::from(42))]),
+                },
+            },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
+                time_bounds: None,
+            },
+        };
+
+        let result = transaction.estimate(&client).await.unwrap();
+
+        assert_eq!(result.fee_estimate.estimated_fee_in_strk, Felt::ZERO);
+        assert_eq!(result.fee_estimate.estimated_fee_in_gas_token, Felt::ZERO);
+        assert_eq!(result.fee_estimate.suggested_max_fee_in_strk, Felt::ZERO);
+        assert_eq!(result.fee_estimate.suggested_max_fee_in_gas_token, Felt::ZERO);
+    }
+
+    #[tokio::test]
+    async fn estimate_sponsored_still_rejects_empty_calls() {
+        let client = TestEnvironment::offline_client();
+
+        let transaction = Transaction {
+            forwarder: StarknetTestEnvironment::FORWARDER,
+            transaction: TransactionParameters::Invoke {
+                invoke: InvokeParameters {
+                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
+                    calls: Calls::new(vec![]),
+                },
+            },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
+                time_bounds: None,
+            },
+        };
+
+        let result = transaction.estimate(&client).await;
+
+        assert!(matches!(result, Err(crate::Error::NoCalls)));
+    }
+
+    #[tokio::test]
+    async fn estimate_default_invoke_still_simulates() {
+        let client = TestEnvironment::offline_client();
+
+        let transaction = Transaction {
+            forwarder: StarknetTestEnvironment::FORWARDER,
+            transaction: TransactionParameters::Invoke {
+                invoke: InvokeParameters {
+                    user_address: StarknetTestEnvironment::ACCOUNT_ARGENT_1.address,
+                    calls: Calls::new(vec![an_eth_transfer(StarknetTestEnvironment::ACCOUNT_2.address, Felt::from(42))]),
+                },
+            },
+            parameters: ExecutionParameters::V1 {
+                fee_mode: FeeMode::Default {
+                    gas_token: StarknetTestEnvironment::ETH,
+                    tip: TipPriority::Normal,
+                },
+                time_bounds: None,
+            },
+        };
+
+        assert!(transaction.estimate(&client).await.is_err());
+    }
 
     // TODO: enable when we can fix starknet image
     #[ignore]
