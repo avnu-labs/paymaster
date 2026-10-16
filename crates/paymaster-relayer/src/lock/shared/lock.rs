@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use deadpool_redis::redis::{AsyncCommands, ExistenceCheck, RedisWrite, SetExpiry, SetOptions, ToRedisArgs};
+use deadpool_redis::redis::{pipe, AsyncCommands, ExistenceCheck, RedisWrite, SetExpiry, SetOptions, ToRedisArgs};
 use deadpool_redis::Connection;
 use futures::StreamExt;
 use starknet::core::types::Felt;
@@ -119,11 +119,15 @@ impl RedisRelayerLock {
         Ok(())
     }
 
-    // TODO: update redis dep
-    #[allow(dependency_on_unit_never_type_fallback)]
+    /// Store the nonce and extend the lock atomically, so the cooldown never applies with a stale nonce
     pub async fn unlock_with_expiry(self, redis: &mut Connection, expiry: u64) -> Result<(), Error> {
-        let lock_key = LockKey::Address(self.address);
-        redis.set_ex(lock_key, Vec::<u8>::new(), expiry).await?;
+        let mut pipeline = pipe();
+        pipeline.atomic();
+        if let Ok(value) = serde_json::to_vec(&self.nonce) {
+            pipeline.set_ex(CacheKey(self.address), value, 60);
+        }
+        pipeline.set_ex(LockKey::Address(self.address), Vec::<u8>::new(), expiry);
+        pipeline.query_async::<()>(redis).await?;
 
         Ok(())
     }
@@ -235,6 +239,26 @@ mod tests {
 
         let lock = RedisRelayerLock::lock(&mut connection, felt!("0x0")).await.unwrap();
         assert_eq!(lock.nonce, Some(felt!("0x42")))
+    }
+
+    #[tokio::test]
+    async fn release_lock_with_expiry_should_cache_invalidated_nonce() {
+        let container = redis_container().await;
+        let pool = redis_pool(&container).await;
+
+        let mut connection = pool.get().await.unwrap();
+
+        let mut lock = RedisRelayerLock::lock(&mut connection, felt!("0x0")).await.unwrap();
+        lock.nonce = Some(felt!("0x42"));
+        lock.unlock(&mut connection).await.unwrap();
+
+        let mut lock = RedisRelayerLock::lock(&mut connection, felt!("0x0")).await.unwrap();
+        lock.nonce = None;
+        lock.unlock_with_expiry(&mut connection, 1).await.unwrap();
+        time::sleep(Duration::from_secs(3)).await;
+
+        let lock = RedisRelayerLock::lock(&mut connection, felt!("0x0")).await.unwrap();
+        assert_eq!(lock.nonce, None)
     }
 
     #[tokio::test]
