@@ -7,7 +7,7 @@ use paymaster_starknet::transaction::EstimatedCalls;
 use paymaster_starknet::{Client, StarknetAccount, StarknetAccountConfiguration};
 use starknet::accounts::{Account, ConnectedAccount};
 use starknet::core::types::{BlockId, BlockTag, Felt, InvokeTransactionResult};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::lock::RelayerLock;
 use crate::Error;
@@ -122,6 +122,20 @@ impl LockedRelayer {
 
                 self.invalidate_nonce();
                 Err(Error::InvalidNonce)
+            },
+            Err(paymaster_starknet::Error::SubmissionUncertain(submission)) => {
+                error!(
+                    relayer = %self.relayer.address().to_fixed_hex_string(),
+                    nonce = %nonce.to_fixed_hex_string(),
+                    transaction_hash = %submission.transaction_hash.to_fixed_hex_string(),
+                    error = %submission.source,
+                    "Relayer transaction submission is uncertain"
+                );
+                metric!(counter[relayer_request_error] = 1, method = "execute", error = "submission_uncertain");
+
+                // The transaction may have consumed this nonce, so it must be fetched again on the next use
+                self.invalidate_nonce();
+                Err(Error::SubmissionUncertain(submission))
             },
             Err(e) => {
                 warn!(

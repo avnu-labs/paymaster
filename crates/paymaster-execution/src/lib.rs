@@ -26,7 +26,10 @@ use paymaster_starknet::{Configuration as StarknetConfiguration, ContractAddress
 use thiserror::Error;
 mod filter;
 
-pub use filter::TransactionDuplicateFilter;
+pub use filter::{Reservation, TransactionDuplicateFilter};
+
+/// Time left to a pending transaction to land before the relayer nonce it may hold is fetched again
+const NONCE_SETTLE_DELAY_SECS: u64 = 20;
 
 use crate::starknet::Client as Starknet;
 
@@ -121,11 +124,16 @@ impl Client {
 
                 Ok(result)
             },
-            Err(Error::InvalidNonce) => {
-                metric!(counter[execution_request_error] = 1, method = "execute", error = "invalid_nonce");
-                let _ = self.relayers.release_relayer_delayed(relayer, 20).await;
+            Err(e @ (Error::InvalidNonce | Error::SubmissionUncertain(_))) => {
+                let error = if matches!(e, Error::InvalidNonce) {
+                    "invalid_nonce"
+                } else {
+                    "submission_uncertain"
+                };
+                metric!(counter[execution_request_error] = 1, method = "execute", error = error);
+                let _ = self.relayers.release_relayer_delayed(relayer, NONCE_SETTLE_DELAY_SECS).await;
 
-                Err(Error::InvalidNonce)
+                Err(e)
             },
             Err(e) => {
                 metric!(counter[execution_request_error] = 1, method = "execute", error = e.to_string());
@@ -148,7 +156,7 @@ impl Client {
                 },
                 Err(e) => {
                     tracing::warn!(attempt, relayer = %relayer.address().to_fixed_hex_string(), error = %e, "Execution failed (non-retryable)");
-                    return Err(Error::Execution(e.to_string()));
+                    return Err(e.into());
                 },
             }
         }

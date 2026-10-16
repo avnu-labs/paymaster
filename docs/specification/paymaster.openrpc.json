@@ -208,6 +208,9 @@
           "$ref": "#/components/errors/TRANSACTION_EXECUTION_ERROR"
         },
         {
+          "$ref": "#/components/errors/TRANSACTION_SUBMISSION_UNCERTAIN"
+        },
+        {
           "$ref": "#/components/errors/PRIVACY_POOL_NOT_WHITELISTED"
         },
         {
@@ -1559,7 +1562,7 @@
         "message": "An error occurred (TRANSACTION_EXECUTION_ERROR)",
         "data": {
           "type": "object",
-          "description": "More data about the execution failure",
+          "description": "More data about the execution failure. This request did not broadcast its transaction: only TRANSACTION_SUBMISSION_UNCERTAIN means it may have",
           "properties": {
             "execution_error": {
               "title": "revert error",
@@ -1628,6 +1631,67 @@
       "POOL_FEE_REQUIRES_PRIVACY": {
         "code": 170,
         "message": "An error occurred (POOL_FEE_REQUIRES_PRIVACY)"
+      },
+      "TRANSACTION_SUBMISSION_UNCERTAIN": {
+        "code": 171,
+        "message": "An error occurred (TRANSACTION_SUBMISSION_UNCERTAIN)",
+        "data": {
+          "type": "object",
+          "description": "The transaction may have been broadcast and can still be accepted. This is the only error with this meaning: any other error guarantees that this request broadcast nothing. Errors only describe the current request: a later request failing without broadcast does not resolve the uncertainty of an earlier one",
+          "properties": {
+            "reason": {
+              "title": "reason",
+              "description": "Why the outcome is uncertain",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "description": "The same transaction is already being submitted by another request (paymaster_executeTransaction only)",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "duplicate"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "The submission of the relayer transaction failed without proving it was refused",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "broadcast"
+                      ]
+                    },
+                    "transaction_hash": {
+                      "title": "transaction hash",
+                      "description": "Hash of the relayer transaction",
+                      "$ref": "#/components/schemas/FELT"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "transaction_hash"
+                  ]
+                }
+              ]
+            },
+            "message": {
+              "title": "message",
+              "description": "The reason of the uncertainty",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "message"
+          ]
+        }
       },
       "POOL_FEE_SPONSORING_NOT_ALLOWED": {
         "code": 172,

@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::ops::Deref;
 use std::time::Duration;
 
@@ -11,8 +12,8 @@ use starknet::core::types::{
     SimulationFlag, SimulationFlagForEstimateFee, StorageProof, StorageResponseFlag, SyncStatusType, TraceBlockTransactionsResult, TraceFlag, Transaction,
     TransactionReceiptWithBlockInfo, TransactionResponseFlag, TransactionStatus, TransactionTrace,
 };
-use starknet::providers::jsonrpc::{HttpTransport, JsonRpcClientError};
-use starknet::providers::{JsonRpcClient, Provider, ProviderError, ProviderRequestData, ProviderResponseData, Url};
+use starknet::providers::jsonrpc::HttpTransport;
+use starknet::providers::{JsonRpcClient, Provider, ProviderError, ProviderImplError, ProviderRequestData, ProviderResponseData, Url};
 use tracing::instrument;
 
 macro_rules! call_with_fallback {
@@ -28,10 +29,21 @@ macro_rules! call_with_fallback {
                 },
                 Error::Rejected => {
                     tracing::warn!("{}", e);
-                    ProviderError::Other(Box::new(JsonRpcClientError::TransportError(e)))
+                    ProviderError::Other(Box::new(NoAvailableEndpoint))
                 }
             })
     };
+}
+
+/// Every endpoint is circuit broken: the request was not sent
+#[derive(Debug, thiserror::Error)]
+#[error("no available RPC endpoint")]
+pub struct NoAvailableEndpoint;
+
+impl ProviderImplError for NoAvailableEndpoint {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[derive(Clone)]

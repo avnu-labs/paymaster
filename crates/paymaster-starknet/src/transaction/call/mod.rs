@@ -4,14 +4,15 @@ use serde::{Deserialize, Serialize};
 use starknet::accounts::{Account, AccountError, ConnectedAccount};
 use starknet::core::types::{
     BlockId, BlockTag, BroadcastedInvokeTransaction, BroadcastedInvokeTransactionV3, BroadcastedTransaction, Call, DataAvailabilityMode, Felt, InvokeTransactionResult,
-    ResourceBounds, ResourceBoundsMapping,
+    ResourceBounds, ResourceBoundsMapping, StarknetError,
 };
+use starknet::providers::jsonrpc::{HttpTransportError, JsonRpcClientError};
 use starknet::providers::{Provider, ProviderError};
 use starknet::signers::SigningKey;
-use tracing::error;
 
+use crate::client::NoAvailableEndpoint;
 use crate::transaction::{ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, PrivateProofData, TimeBounds, TransactionGasEstimate};
-use crate::{ChainID, Error, StarknetAccount};
+use crate::{ChainID, Error, StarknetAccount, UncertainSubmission};
 
 mod calldata;
 pub use calldata::{AsCalldata, CalldataBuilder, SequentialCalldataDecoder};
@@ -225,21 +226,94 @@ impl EstimatedCalls {
                 .proof(proof_data.proof.clone());
         }
 
-        let result = execution.send().await;
+        let execution = execution.prepared().map_err(|e| Error::Internal(e.to_string()))?;
+        let transaction_hash = execution.transaction_hash(false);
 
-        match &result {
-            Err(AccountError::Provider(e @ ProviderError::RateLimited)) => {
-                error!("{}", e);
+        match execution.send().await {
+            Err(AccountError::Provider(source)) if !is_refusal(&source) => {
+                let source = Box::new(source);
+                Err(UncertainSubmission { transaction_hash, source }.into())
             },
-            Err(AccountError::Provider(e @ ProviderError::ArrayLengthMismatch)) => {
-                error!("{}", e);
-            },
-            Err(AccountError::Provider(ProviderError::Other(error))) => {
-                error!("{}", error);
-            },
-            _ => {},
-        };
+            result => Ok(result?),
+        }
+    }
+}
 
-        Ok(result?)
+/// Whether a submission error proves the transaction was not accepted: a refusal declared by
+/// `starknet_addInvokeTransaction`, or a request that never reached a node. Any other error (timeout, duplicate
+/// in the mempool, unexpected or undeclared error...) may hide a transaction accepted by the sequencer.
+fn is_refusal(error: &ProviderError) -> bool {
+    match error {
+        ProviderError::StarknetError(error) => matches!(
+            error,
+            StarknetError::ValidationFailure(_)
+                | StarknetError::InvalidTransactionNonce(_)
+                | StarknetError::InsufficientResourcesForValidate
+                | StarknetError::InsufficientAccountBalance
+                | StarknetError::FeeBelowMinimum
+                | StarknetError::ReplacementTransactionUnderpriced
+                | StarknetError::NonAccount
+                | StarknetError::UnsupportedTxVersion
+                | StarknetError::InvalidProof
+        ),
+        ProviderError::Other(error) => {
+            let error = error.as_any();
+            error.is::<NoAvailableEndpoint>()
+                || matches!(
+                    error.downcast_ref::<JsonRpcClientError<HttpTransportError>>(),
+                    Some(JsonRpcClientError::TransportError(HttpTransportError::Reqwest(error))) if error.is_connect()
+                )
+        },
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use starknet::core::types::{ContractErrorData, ContractExecutionError, Felt, StarknetError};
+    use starknet::providers::jsonrpc::{HttpTransport, HttpTransportError, JsonRpcClientError};
+    use starknet::providers::{JsonRpcClient, Provider, ProviderError, Url};
+
+    use super::is_refusal;
+    use crate::client::NoAvailableEndpoint;
+
+    #[tokio::test]
+    async fn refusals_are_recognized() {
+        let unreachable_node = JsonRpcClient::new(HttpTransport::new(Url::parse("http://127.0.0.1:1").unwrap()));
+        let errors = [
+            ProviderError::StarknetError(StarknetError::ValidationFailure("invalid signature".to_string())),
+            ProviderError::StarknetError(StarknetError::InvalidTransactionNonce("invalid nonce".to_string())),
+            ProviderError::StarknetError(StarknetError::InsufficientResourcesForValidate),
+            ProviderError::StarknetError(StarknetError::InsufficientAccountBalance),
+            ProviderError::StarknetError(StarknetError::FeeBelowMinimum),
+            ProviderError::StarknetError(StarknetError::ReplacementTransactionUnderpriced),
+            ProviderError::StarknetError(StarknetError::NonAccount),
+            ProviderError::StarknetError(StarknetError::UnsupportedTxVersion),
+            ProviderError::StarknetError(StarknetError::InvalidProof),
+            ProviderError::Other(Box::new(NoAvailableEndpoint)),
+            unreachable_node.block_number().await.unwrap_err(),
+        ];
+
+        for error in errors {
+            assert!(is_refusal(&error), "{error:?}");
+        }
+    }
+
+    #[test]
+    fn other_errors_are_uncertain() {
+        let malformed_response = serde_json::from_str::<Felt>("").unwrap_err();
+        let errors = [
+            ProviderError::Other(Box::new(JsonRpcClientError::<HttpTransportError>::JsonError(malformed_response))),
+            ProviderError::RateLimited,
+            ProviderError::StarknetError(StarknetError::DuplicateTx),
+            ProviderError::StarknetError(StarknetError::UnexpectedError("gateway timeout".to_string())),
+            ProviderError::StarknetError(StarknetError::ContractError(ContractErrorData {
+                revert_error: ContractExecutionError::Message("reverted".to_string()),
+            })),
+        ];
+
+        for error in errors {
+            assert!(!is_refusal(&error), "{error:?}");
+        }
     }
 }

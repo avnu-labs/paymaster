@@ -1,7 +1,13 @@
+use futures::future::BoxFuture;
 use jsonrpsee::core::Serialize;
+use paymaster_execution::ExecutableTransaction;
+use paymaster_sponsoring::AuthenticatedApiKey;
 use paymaster_starknet::constants::Token;
 use serde::Deserialize;
-use starknet::core::types::Felt;
+use starknet::core::types::{Felt, InvokeTransactionResult};
+
+use crate::endpoint::RequestContext;
+use crate::Error;
 
 /// Deployment parameters required to deploy a contract
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -264,6 +270,26 @@ impl FeeMode {
             Self::SponsoredPrivate { tip, .. } => *tip,
         }
     }
+}
+
+/// Boxed to keep the endpoint futures shallow enough for the compiler query depth limit
+pub(crate) fn estimate_and_execute<'a>(
+    ctx: &'a RequestContext<'_>,
+    transaction: ExecutableTransaction,
+    authenticated_api_key: Option<AuthenticatedApiKey>,
+) -> BoxFuture<'a, Result<InvokeTransactionResult, Error>> {
+    Box::pin(async move {
+        let estimated_transaction = match authenticated_api_key {
+            Some(authenticated_api_key) => {
+                transaction
+                    .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
+                    .await?
+            },
+            None => transaction.estimate_transaction(&ctx.execution).await?,
+        };
+
+        Ok(estimated_transaction.execute(&ctx.execution).await?)
+    })
 }
 
 #[cfg(test)]
