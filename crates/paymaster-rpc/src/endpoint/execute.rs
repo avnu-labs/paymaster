@@ -5,7 +5,7 @@ use serde_with::serde_as;
 use starknet::core::serde::unsigned_field_element::UfeHex;
 use starknet::core::types::{Call, Felt, TypedData};
 
-use crate::endpoint::common::{DeploymentParameters, ExecutionParameters};
+use crate::endpoint::common::{estimate_and_execute, DeploymentParameters, ExecutionParameters};
 use crate::endpoint::validation::{authorize_fee_mode, check_fee_mode_matches_transaction, check_service_is_available};
 use crate::endpoint::RequestContext;
 use crate::Error;
@@ -159,18 +159,15 @@ pub async fn execute_endpoint(ctx: &RequestContext<'_>, request: ExecuteRequest)
         privacy_pool_fee_amount,
     };
 
-    ctx.transaction_filter.filter(&transaction.transaction)?;
+    let reservation = ctx.transaction_filter.filter(&transaction.transaction)?;
 
-    let estimated_transaction = match authenticated_api_key {
-        Some(authenticated_api_key) => {
-            transaction
-                .estimate_sponsored_transaction(&ctx.execution, authenticated_api_key.sponsor_metadata)
-                .await?
-        },
-        None => transaction.estimate_transaction(&ctx.execution).await?,
-    };
-
-    let result = estimated_transaction.execute(&ctx.execution).await?;
+    let result = estimate_and_execute(ctx, transaction, authenticated_api_key)
+        .await
+        .inspect_err(|e| {
+            if !e.may_have_broadcast() {
+                reservation.release();
+            }
+        })?;
 
     Ok(ExecuteResponse {
         transaction_hash: result.transaction_hash,

@@ -6,9 +6,11 @@ use jsonrpsee::types::ErrorObject;
 use paymaster_execution::Error as PaymasterExecutionError;
 use paymaster_prices::Error as PriceError;
 use paymaster_relayer::Error as RelayerError;
-use paymaster_starknet::Error as StarknetError;
+use paymaster_starknet::{Error as StarknetError, UncertainSubmission};
 use serde::Deserialize;
-use starknet::core::types::ContractExecutionError;
+use serde_with::serde_as;
+use starknet::core::serde::unsigned_field_element::UfeHex;
+use starknet::core::types::{ContractExecutionError, Felt};
 use thiserror::Error;
 
 mod context;
@@ -119,6 +121,30 @@ pub enum Error {
 
     #[error("{0:?}")]
     Execution(ContractExecutionError),
+
+    #[error("transaction already submitted")]
+    DuplicateSubmission,
+
+    #[error("submission of transaction {transaction_hash:#x} is uncertain: {message}")]
+    SubmissionUncertain { transaction_hash: Felt, message: String },
+}
+
+impl Error {
+    /// Whether the transaction may have been broadcast: any other error guarantees that the request broadcast
+    /// nothing. It only describes the current request: a later request failing without broadcast does not tell
+    /// whether an earlier uncertain one will land.
+    pub fn may_have_broadcast(&self) -> bool {
+        matches!(self, Self::DuplicateSubmission | Self::SubmissionUncertain { .. })
+    }
+}
+
+impl From<UncertainSubmission> for Error {
+    fn from(submission: UncertainSubmission) -> Self {
+        Self::SubmissionUncertain {
+            transaction_hash: submission.transaction_hash,
+            message: submission.source.to_string(),
+        }
+    }
 }
 
 impl From<StarknetError> for Error {
@@ -128,6 +154,7 @@ impl From<StarknetError> for Error {
             StarknetError::ContractNotFound => Self::InvalidAddress,
             StarknetError::Internal(_) => Self::Execution(ContractExecutionError::Message("Internal error".to_string())),
             StarknetError::Execution(error) => Self::Execution(error),
+            StarknetError::SubmissionUncertain(submission) => submission.into(),
             e => Self::Execution(ContractExecutionError::Message(e.to_string())),
         }
     }
@@ -141,7 +168,10 @@ impl From<PriceError> for Error {
 
 impl From<RelayerError> for Error {
     fn from(value: RelayerError) -> Self {
-        Self::Execution(ContractExecutionError::Message(value.to_string()))
+        match value {
+            RelayerError::SubmissionUncertain(submission) => submission.into(),
+            other => Self::Execution(ContractExecutionError::Message(other.to_string())),
+        }
     }
 }
 
@@ -155,6 +185,8 @@ impl From<PaymasterExecutionError> for Error {
             PaymasterExecutionError::MaxAmountTooLow(_) => Self::MaxAmountTooLow,
             PaymasterExecutionError::PoolFeeTooLow(_) => Self::PoolFeeTooLow,
             PaymasterExecutionError::MaxL2GasAmountExceeded(msg) => Self::MaxL2GasAmountExceeded(msg),
+            PaymasterExecutionError::DuplicateSubmission => Self::DuplicateSubmission,
+            PaymasterExecutionError::SubmissionUncertain(submission) => submission.into(),
             other => Self::Execution(ContractExecutionError::Message(other.to_string())),
         }
     }
@@ -163,6 +195,25 @@ impl From<PaymasterExecutionError> for Error {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct ExecutionError {
     execution_error: ContractExecutionError,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct SubmissionUncertainError {
+    reason: SubmissionUncertainReason,
+    message: String,
+}
+
+#[serde_as]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SubmissionUncertainReason {
+    /// The same transaction is already being submitted by another request
+    Duplicate,
+    /// The submission of this transaction failed without proving it was refused
+    Broadcast {
+        #[serde_as(as = "UfeHex")]
+        transaction_hash: Felt,
+    },
 }
 
 impl<'a> From<Error> for ErrorObject<'a> {
@@ -186,9 +237,62 @@ impl<'a> From<Error> for ErrorObject<'a> {
             Error::PoolFeeSponsoringNotAllowed => ErrorObject::borrowed(172, "An error occurred (POOL_FEE_SPONSORING_NOT_ALLOWED)", None),
             Error::UnexpectedFeeTransferTo => ErrorObject::borrowed(173, "An error occurred (UNEXPECTED_FEE_TRANSFER_TO)", None),
             Error::Execution(e) => ErrorObject::owned(156, "An error occurred (TRANSACTION_EXECUTION_ERROR)", Some(ExecutionError { execution_error: e })),
+            Error::DuplicateSubmission => ErrorObject::owned(
+                171,
+                "An error occurred (TRANSACTION_SUBMISSION_UNCERTAIN)",
+                Some(SubmissionUncertainError {
+                    reason: SubmissionUncertainReason::Duplicate,
+                    message: Error::DuplicateSubmission.to_string(),
+                }),
+            ),
+            Error::SubmissionUncertain { transaction_hash, message } => ErrorObject::owned(
+                171,
+                "An error occurred (TRANSACTION_SUBMISSION_UNCERTAIN)",
+                Some(SubmissionUncertainError {
+                    reason: SubmissionUncertainReason::Broadcast { transaction_hash },
+                    message,
+                }),
+            ),
             Error::BlacklistedCalls => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::BlacklistedCalls.to_string())),
             Error::ServiceNotAvailable => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::ServiceNotAvailable.to_string())),
             Error::InvalidAPIKey => ErrorObject::owned(163, "An error occurred (UNKNOWN_ERROR)", Some(Error::InvalidAPIKey.to_string())),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jsonrpsee::types::ErrorObject;
+    use paymaster_starknet::UncertainSubmission;
+    use serde_json::json;
+    use starknet::macros::felt;
+    use starknet::providers::ProviderError;
+
+    use crate::Error;
+
+    fn data(error: ErrorObject) -> serde_json::Value {
+        serde_json::from_str(error.data().unwrap().get()).unwrap()
+    }
+
+    #[test]
+    fn uncertain_submission_maps_to_171_with_transaction_hash() {
+        let error = ErrorObject::from(Error::from(UncertainSubmission {
+            transaction_hash: felt!("0x123"),
+            source: Box::new(ProviderError::RateLimited),
+        }));
+
+        assert_eq!(error.code(), 171);
+        assert_eq!(
+            data(error),
+            json!({ "reason": { "type": "broadcast", "transaction_hash": "0x123" }, "message": ProviderError::RateLimited.to_string() })
+        );
+    }
+
+    #[test]
+    fn duplicate_submission_maps_to_171() {
+        let error = ErrorObject::from(Error::DuplicateSubmission);
+
+        assert_eq!(error.code(), 171);
+        assert_eq!(data(error), json!({ "reason": { "type": "duplicate" }, "message": "transaction already submitted" }));
     }
 }

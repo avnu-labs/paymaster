@@ -113,6 +113,9 @@ pub enum Error {
     #[error("Execution error {0:?}")]
     Execution(ContractExecutionError),
 
+    #[error(transparent)]
+    SubmissionUncertain(#[from] UncertainSubmission),
+
     #[error("starknet error {0}")]
     ValidationFailure(String),
 
@@ -120,10 +123,21 @@ pub enum Error {
     MaxL2GasAmountExceeded { required: u64, max: u64 },
 }
 
+/// A submission that failed without proving the transaction was refused: it may still be accepted by the sequencer
+#[derive(Error, Debug)]
+#[error("submission of transaction {transaction_hash:#x} is uncertain")]
+pub struct UncertainSubmission {
+    pub transaction_hash: Felt,
+    #[source]
+    pub source: Box<ProviderError>,
+}
+
 impl From<ProviderError> for Error {
     fn from(value: ProviderError) -> Self {
         match value {
             ProviderError::StarknetError(StarknetError::InvalidTransactionNonce(value)) => Error::InvalidNonce(value),
+            // A pending transaction already holds the nonce
+            ProviderError::StarknetError(e @ StarknetError::ReplacementTransactionUnderpriced) => Error::InvalidNonce(e.to_string()),
             ProviderError::StarknetError(StarknetError::TransactionExecutionError(e)) => Error::Execution(e.execution_error),
             ProviderError::StarknetError(StarknetError::ContractError(e)) => Error::Execution(e.revert_error),
             ProviderError::StarknetError(StarknetError::ContractNotFound) => Error::ContractNotFound,

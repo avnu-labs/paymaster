@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use paymaster_common::service::TokioServiceManager;
+use paymaster_starknet::UncertainSubmission;
 use starknet::accounts::Account;
 use thiserror::Error;
 use tracing::debug;
@@ -61,6 +62,9 @@ pub enum Error {
 
     #[error("execution {0}")]
     Execution(String),
+
+    #[error(transparent)]
+    SubmissionUncertain(UncertainSubmission),
 }
 
 #[derive(Clone)]

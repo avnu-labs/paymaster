@@ -1,3 +1,4 @@
+use paymaster_starknet::UncertainSubmission;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -49,6 +50,12 @@ pub enum Error {
 
     #[error("execution error {0}")]
     Execution(String),
+
+    #[error("transaction already submitted")]
+    DuplicateSubmission,
+
+    #[error(transparent)]
+    SubmissionUncertain(UncertainSubmission),
 }
 
 impl From<paymaster_starknet::Error> for Error {
@@ -56,6 +63,7 @@ impl From<paymaster_starknet::Error> for Error {
         match value {
             paymaster_starknet::Error::InvalidNonce(_) => Self::InvalidVersion,
             e @ paymaster_starknet::Error::MaxL2GasAmountExceeded { .. } => Self::MaxL2GasAmountExceeded(e.to_string()),
+            paymaster_starknet::Error::SubmissionUncertain(submission) => Self::SubmissionUncertain(submission),
             e => Self::Execution(e.to_string()),
         }
     }
@@ -65,6 +73,7 @@ impl From<paymaster_relayer::Error> for Error {
     fn from(value: paymaster_relayer::Error) -> Self {
         match value {
             paymaster_relayer::Error::InvalidNonce => Self::InvalidNonce,
+            paymaster_relayer::Error::SubmissionUncertain(submission) => Self::SubmissionUncertain(submission),
             e => Self::Execution(e.to_string()),
         }
     }
