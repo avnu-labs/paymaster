@@ -7,7 +7,13 @@ pub use estimate::FeeEstimate;
 use starknet::core::types::Felt;
 
 /// Action describing a fee payment the user must include in their private transaction.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FeeAction {
-    Withdraw { recipient: Felt, token: Felt, amount: Felt },
+    Withdraw {
+        recipient: Felt,
+        token: Felt,
+        amount: Felt,
+    },
+    /// Nothing to add to the proof: the sponsor pays the pool fee
+    None,
 }

@@ -1,4 +1,5 @@
 use paymaster_prices::math::convert_strk_to_token;
+use paymaster_prices::TokenPrice;
 use paymaster_starknet::constants::Token;
 use paymaster_starknet::transaction::{Calls, ExecuteFromOutsideMessage, ExecuteFromOutsideParameters, PaymasterVersion, TokenTransfer};
 use paymaster_starknet::{ChainID, ContractAddress};
@@ -386,6 +387,8 @@ impl PrivateTransaction {
         let suggested_max_fee_in_strk = client.compute_max_fee_in_strk(estimated_fee_in_strk) + pool_fee_with_overhead;
         let suggested_max_fee_in_gas_token = convert_strk_to_token(&token, suggested_max_fee_in_strk, true)?;
 
+        let fee_action = self.fee_action(&token, pool_fee_with_overhead, suggested_max_fee_in_gas_token)?;
+
         let typed_data = if let Some(user_calls) = self.user_calls {
             let version = client
                 .starknet
@@ -406,18 +409,6 @@ impl PrivateTransaction {
             None
         };
 
-        // In sponsored mode the relayer covers gas but the user still pays the pool fee. Reuse the
-        // overhead-aware amount computed above (no overhead when gas_token == STRK).
-        let fee_action_amount = if self.parameters.fee_mode().is_sponsored() {
-            if self.pool_fee_amount > 0 {
-                convert_strk_to_token(&token, pool_fee_with_overhead, true)?
-            } else {
-                Felt::ZERO
-            }
-        } else {
-            suggested_max_fee_in_gas_token
-        };
-
         Ok(EstimatedPrivateTransaction {
             parameters: self.parameters,
             fee_estimate: FeeEstimate {
@@ -427,12 +418,30 @@ impl PrivateTransaction {
                 suggested_max_fee_in_strk,
                 suggested_max_fee_in_gas_token,
             },
-            fee_action: FeeAction::Withdraw {
-                recipient: self.forwarder,
-                token: gas_token,
-                amount: fee_action_amount,
-            },
+            fee_action,
             typed_data,
+        })
+    }
+
+    /// What the user must withdraw to the forwarder, `pool_fee_with_overhead` being in STRK
+    fn fee_action(&self, token: &TokenPrice, pool_fee_with_overhead: Felt, suggested_max_fee_in_gas_token: Felt) -> Result<FeeAction, Error> {
+        let fee_mode = self.parameters.fee_mode();
+        if fee_mode.is_pool_fee_sponsored() {
+            return Ok(FeeAction::None);
+        }
+
+        let amount = if !fee_mode.is_sponsored() {
+            suggested_max_fee_in_gas_token
+        } else if self.pool_fee_amount > 0 {
+            convert_strk_to_token(token, pool_fee_with_overhead, true)?
+        } else {
+            Felt::ZERO
+        };
+
+        Ok(FeeAction::Withdraw {
+            recipient: self.forwarder,
+            token: fee_mode.gas_token(),
+            amount,
         })
     }
 }
@@ -576,7 +585,10 @@ mod tests {
                 },
             },
             parameters: ExecutionParameters::V1 {
-                fee_mode: FeeMode::Sponsored { tip: TipPriority::Normal },
+                fee_mode: FeeMode::Sponsored {
+                    pool_fee: None,
+                    tip: TipPriority::Normal,
+                },
                 time_bounds: None,
             },
         };
@@ -714,5 +726,106 @@ mod tests {
         assert_eq!(calls[1].to, StarknetTestEnvironment::ETH);
         assert_eq!(calls[1].selector, selector!("transfer"));
         assert_eq!(calls[1].calldata, vec![StarknetTestEnvironment::FORWARDER, felt!("0x1b6253b33b4000"), Felt::ZERO]);
+    }
+
+    mod fee_action {
+        use paymaster_prices::TokenPrice;
+        use paymaster_starknet::constants::Token;
+        use starknet::core::types::Felt;
+        use starknet::macros::felt;
+
+        use crate::execution::build::PrivateTransaction;
+        use crate::execution::{ExecutionParameters, FeeAction, FeeMode, PoolFee, TipPriority};
+
+        const FORWARDER: Felt = felt!("0xf0");
+        const POOL_FEE: u128 = 4_000_000_000_000_000_000;
+        const SUGGESTED_MAX_FEE: Felt = felt!("0x1234");
+
+        // 1 ETH = 2 STRK, so amounts in STRK are halved
+        fn eth() -> TokenPrice {
+            TokenPrice {
+                address: Token::ETH_ADDRESS,
+                decimals: 18,
+                price_in_strk: Felt::from(2_000_000_000_000_000_000u128),
+            }
+        }
+
+        fn transaction(fee_mode: FeeMode, pool_fee_amount: u128) -> PrivateTransaction {
+            PrivateTransaction {
+                forwarder: FORWARDER,
+                parameters: ExecutionParameters::V1 { fee_mode, time_bounds: None },
+                pool_fee_amount,
+                privacy_gas_overhead: 0,
+                user_calls: None,
+            }
+        }
+
+        fn sponsored(pool_fee: PoolFee) -> FeeMode {
+            FeeMode::Sponsored {
+                pool_fee: Some(pool_fee),
+                tip: TipPriority::Normal,
+            }
+        }
+
+        #[test]
+        fn should_be_none_when_sponsor_pays_pool_fee() {
+            let transaction = transaction(sponsored(PoolFee::Sponsor), POOL_FEE);
+
+            let fee_action = transaction.fee_action(&eth(), Felt::from(POOL_FEE), SUGGESTED_MAX_FEE).unwrap();
+
+            assert_eq!(fee_action, FeeAction::None);
+        }
+
+        #[test]
+        fn should_withdraw_pool_fee_in_chosen_token_when_user_pays_pool_fee() {
+            let transaction = transaction(sponsored(PoolFee::User { token: Token::ETH_ADDRESS }), POOL_FEE);
+
+            let fee_action = transaction.fee_action(&eth(), Felt::from(POOL_FEE), SUGGESTED_MAX_FEE).unwrap();
+
+            assert_eq!(
+                fee_action,
+                FeeAction::Withdraw {
+                    recipient: FORWARDER,
+                    token: Token::ETH_ADDRESS,
+                    amount: Felt::from(POOL_FEE / 2),
+                }
+            );
+        }
+
+        #[test]
+        fn should_withdraw_zero_when_pool_has_no_fee() {
+            let transaction = transaction(sponsored(PoolFee::User { token: Token::ETH_ADDRESS }), 0);
+
+            let fee_action = transaction.fee_action(&eth(), Felt::ZERO, SUGGESTED_MAX_FEE).unwrap();
+
+            assert_eq!(
+                fee_action,
+                FeeAction::Withdraw {
+                    recipient: FORWARDER,
+                    token: Token::ETH_ADDRESS,
+                    amount: Felt::ZERO,
+                }
+            );
+        }
+
+        #[test]
+        fn should_withdraw_suggested_max_fee_when_gasless() {
+            let gasless = FeeMode::Default {
+                gas_token: Token::ETH_ADDRESS,
+                tip: TipPriority::Normal,
+            };
+            let transaction = transaction(gasless, POOL_FEE);
+
+            let fee_action = transaction.fee_action(&eth(), Felt::from(POOL_FEE), SUGGESTED_MAX_FEE).unwrap();
+
+            assert_eq!(
+                fee_action,
+                FeeAction::Withdraw {
+                    recipient: FORWARDER,
+                    token: Token::ETH_ADDRESS,
+                    amount: SUGGESTED_MAX_FEE,
+                }
+            );
+        }
     }
 }
